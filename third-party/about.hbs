@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>smithers-nanocodex third-party licenses</title>
+  <style>
+    body { font-family: sans-serif; line-height: 1.4; margin: 2rem auto; max-width: 72rem; padding: 0 1rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #bbb; padding: .35rem .5rem; text-align: left; }
+    pre { border: 1px solid #bbb; overflow-wrap: anywhere; padding: 1rem; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>smithers-nanocodex third-party licenses</h1>
+  <p>
+    This binary contains the following third-party Rust packages. Package links,
+    versions, declared license expressions, and applicable license texts were
+    generated from the locked production dependency graph.
+  </p>
+
+  <h2>Components</h2>
+  <table>
+    <thead><tr><th>Package</th><th>Version</th><th>License</th></tr></thead>
+    <tbody>
+    {{#each crates}}
+      <tr>
+        <td><a href="{{#if package.repository}}{{package.repository}}{{else}}https://crates.io/crates/{{package.name}}{{/if}}">{{package.name}}</a></td>
+        <td>{{package.version}}</td>
+        <td>{{license}}</td>
+      </tr>
+    {{/each}}
+    </tbody>
+  </table>
+
+  <h2>License texts and notices</h2>
+  {{#each licenses}}
+    <section class="license-record" data-license-index="{{@index}}">
+      <h3>{{name}} ({{id}})</h3>
+      <p>Applies to:</p>
+      <ul>
+      {{#each used_by}}
+        <li><code>{{crate.name}} {{crate.version}}</code></li>
+      {{/each}}
+      </ul>
+      <pre>{{text}}</pre>
+    </section>
+  {{/each}}
+</body>
+</html>

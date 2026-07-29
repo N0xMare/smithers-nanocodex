@@ -1,0 +1,189 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Build and package Linux x86_64
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+
+    # Distribution contract: x86_64 Linux with glibc 2.35 or newer.
+    # Ubuntu 22.04 is both the build environment and oldest supported image.
+    env:
+      BASELINE_IMAGE: ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
+      RUST_VERSION: 1.97.0
+      TARGET: x86_64-unknown-linux-gnu
+
+    outputs:
+      archive: ${{ steps.package.outputs.archive }}
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install "$RUST_VERSION" --profile minimal --component clippy,rustfmt
+
+      - name: Validate release tag
+        id: release
+        shell: bash
+        run: |
+          package_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          test -n "$package_version"
+          test "$GITHUB_REF_NAME" = "v$package_version"
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
+
+      - name: Check dependency advisories, licenses, and sources
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          arguments: --locked
+
+      - name: Install pinned license-notice generator
+        run: cargo install --locked cargo-about --version 0.9.1 --features cli
+
+      - name: Check third-party license notice
+        shell: bash
+        run: |
+          generated_notice="$RUNNER_TEMP/THIRD-PARTY-LICENSES.html"
+          generated_records="$RUNNER_TEMP/THIRD-PARTY-LICENSES.json"
+          cargo about generate --locked --all-features --fail \
+            --output-file "$generated_notice" third-party/about.hbs
+          cargo about generate --locked --all-features --fail --format json \
+            > "$generated_records"
+          expected_records="$(python3 -c 'import json, sys; print(len(json.load(open(sys.argv[1]))["licenses"]))' "$generated_records")"
+          test "$(grep -c '<section class="license-record"' "$generated_notice")" = "$expected_records"
+          test "$(grep -c '<pre>' "$generated_notice")" = "$expected_records"
+          cmp third-party/THIRD-PARTY-LICENSES.html "$generated_notice"
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check all targets
+        run: cargo check --locked --all-targets
+
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --locked --all-targets
+
+      - name: Build release binary
+        run: cargo build --locked --release --target "$TARGET"
+
+      - name: Verify release binary
+        shell: bash
+        run: |
+          test "$(uname -m)" = "x86_64"
+          test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
+          test "$(./target/$TARGET/release/smithers-nanocodex --version)" = \
+            "smithers-nanocodex ${{ steps.release.outputs.version }}"
+          ./target/$TARGET/release/smithers-nanocodex capabilities --json
+
+      - name: Package release archive
+        id: package
+        shell: bash
+        run: |
+          target="x86_64-unknown-linux-gnu"
+          package="smithers-nanocodex-${GITHUB_REF_NAME}-${target}"
+          archive="${package}.tar.gz"
+          source_date_epoch="$(git log -1 --format=%ct)"
+          install -d -m 0755 \
+            "dist/${package}" \
+            "dist/${package}/docs" \
+            "dist/${package}/third-party"
+          install -m 0755 "target/${target}/release/smithers-nanocodex" "dist/${package}/"
+          install -m 0644 README.md LICENSE "dist/${package}/"
+          cp -R docs/. "dist/${package}/docs/"
+          find "dist/${package}/docs" -type d -exec chmod 0755 {} +
+          find "dist/${package}/docs" -type f -exec chmod 0644 {} +
+          install -m 0644 third-party/README.md third-party/THIRD-PARTY-LICENSES.html \
+            "dist/${package}/third-party/"
+          tar --sort=name \
+            --mtime="@${source_date_epoch}" \
+            --owner=0 --group=0 --numeric-owner \
+            --pax-option=delete=atime,delete=ctime \
+            -C dist -cf - "${package}" | gzip -n -9 > "dist/${archive}"
+          cd dist
+          sha256sum "${archive}" > "${archive}.sha256"
+          echo "archive=${archive}" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke-test archive on the oldest supported Linux baseline
+        shell: bash
+        run: |
+          archive="dist/${{ steps.package.outputs.archive }}"
+          package="${{ steps.package.outputs.archive }}"
+          package="${package%.tar.gz}"
+          mkdir -p smoke
+          tar -C smoke -xzf "$archive"
+          chmod 0755 smoke "smoke/${package}"
+          chmod -R a+rX "smoke/${package}"
+          test "$(tar -tzf "$archive" | head -n 1)" = "${package}/"
+          timeout --signal=TERM --kill-after=5s 30s \
+            docker run --rm --platform linux/amd64 --network none \
+            --user 65534:65534 \
+            --volume "$PWD/smoke/${package}:/opt/release:ro" \
+            "$BASELINE_IMAGE" \
+            /opt/release/smithers-nanocodex --version
+          timeout --signal=TERM --kill-after=5s 30s \
+            docker run --rm --platform linux/amd64 --network none \
+            --user 65534:65534 \
+            --volume "$PWD/smoke/${package}:/opt/release:ro" \
+            "$BASELINE_IMAGE" \
+            /opt/release/smithers-nanocodex capabilities --json
+
+      - name: Upload verified release files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ github.ref_name }}
+          path: |
+            dist/${{ steps.package.outputs.archive }}
+            dist/${{ steps.package.outputs.archive }}.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub release
+    needs: package
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download verified release files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-${{ github.ref_name }}
+          path: dist
+
+      - name: Verify downloaded checksum
+        working-directory: dist
+        run: sha256sum --check "${{ needs.package.outputs.archive }}.sha256"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/${{ needs.package.outputs.archive }}" \
+            "dist/${{ needs.package.outputs.archive }}.sha256" \
+            --verify-tag \
+            --generate-notes \
+            --title "smithers-nanocodex $GITHUB_REF_NAME"

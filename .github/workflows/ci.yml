@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Rust verification
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+
+    # Distribution baseline: x86_64 Linux with glibc 2.35 or newer
+    # (Ubuntu 22.04). Release packaging enforces the same contract.
+    env:
+      RUST_VERSION: 1.97.0
+      TARGET: x86_64-unknown-linux-gnu
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install "$RUST_VERSION" --profile minimal --component clippy,rustfmt
+
+      - name: Check dependency advisories, licenses, and sources
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          arguments: --locked
+
+      - name: Install pinned license-notice generator
+        run: cargo install --locked cargo-about --version 0.9.1 --features cli
+
+      - name: Check third-party license notice
+        shell: bash
+        run: |
+          generated_notice="$RUNNER_TEMP/THIRD-PARTY-LICENSES.html"
+          generated_records="$RUNNER_TEMP/THIRD-PARTY-LICENSES.json"
+          cargo about generate --locked --all-features --fail \
+            --output-file "$generated_notice" third-party/about.hbs
+          cargo about generate --locked --all-features --fail --format json \
+            > "$generated_records"
+          expected_records="$(python3 -c 'import json, sys; print(len(json.load(open(sys.argv[1]))["licenses"]))' "$generated_records")"
+          test "$(grep -c '<section class="license-record"' "$generated_notice")" = "$expected_records"
+          test "$(grep -c '<pre>' "$generated_notice")" = "$expected_records"
+          cmp third-party/THIRD-PARTY-LICENSES.html "$generated_notice"
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check all targets
+        run: cargo check --locked --all-targets
+
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --locked --all-targets
+
+      - name: Build release binary
+        run: cargo build --locked --release --target "$TARGET"
+
+      - name: Verify release metadata
+        shell: bash
+        run: |
+          package_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          test -n "$package_version"
+          test "$(uname -m)" = "x86_64"
+          test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
+          test "$(./target/$TARGET/release/smithers-nanocodex --version)" = \
+            "smithers-nanocodex $package_version"
+          ./target/$TARGET/release/smithers-nanocodex capabilities --json
+
+  macos-portability:
+    name: macOS source portability
+    runs-on: macos-15
+    timeout-minutes: 40
+
+    # This proves the source and provider-independent suite stay portable. It
+    # does not create a supported artifact or replace Linux PID containment.
+    env:
+      RUST_VERSION: 1.97.0
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install "$RUST_VERSION" --profile minimal
+
+      - name: Run provider-independent tests
+        run: cargo test --locked --all-targets

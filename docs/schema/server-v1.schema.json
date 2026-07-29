@@ -1,0 +1,402 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://n0xmare.github.io/smithers-nanocodex/schema/server-v1.schema.json",
+  "title": "Smithers Nanocodex protocol v1 server record",
+  "oneOf": [
+    { "$ref": "#/$defs/hello" },
+    { "$ref": "#/$defs/turnAccepted" },
+    { "$ref": "#/$defs/agentEventRecord" },
+    { "$ref": "#/$defs/agentEventTruncated" },
+    { "$ref": "#/$defs/commandAccepted" },
+    { "$ref": "#/$defs/commandRejected" },
+    { "$ref": "#/$defs/turnCompleted" },
+    { "$ref": "#/$defs/turnFailed" },
+    { "$ref": "#/$defs/turnCancelled" },
+    { "$ref": "#/$defs/processFailed" }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "upstreamSeq": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "absolutePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^/[^\\u0000]*$"
+    },
+    "publicError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "category", "message", "retry"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,127}$"
+        },
+        "category": {
+          "enum": [
+            "protocol",
+            "config",
+            "auth",
+            "checkpoint",
+            "workspace",
+            "provider",
+            "tool",
+            "cleanup",
+            "internal"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 513
+        },
+        "retry": {
+          "enum": ["never", "safe", "after"]
+        },
+        "retryAfterMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "oneOf": [
+        {
+          "properties": { "retry": { "const": "after" } },
+          "required": ["retryAfterMs"]
+        },
+        {
+          "properties": { "retry": { "enum": ["never", "safe"] } },
+          "not": { "required": ["retryAfterMs"] }
+        }
+      ]
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputTokens",
+        "cachedInputTokens",
+        "cacheWriteInputTokens",
+        "outputTokens",
+        "reasoningOutputTokens",
+        "totalTokens",
+        "estimatedUsd",
+        "costStatus",
+        "serviceTier"
+      ],
+      "properties": {
+        "inputTokens": { "$ref": "#/$defs/tokenCount" },
+        "cachedInputTokens": { "$ref": "#/$defs/tokenCount" },
+        "cacheWriteInputTokens": { "$ref": "#/$defs/tokenCount" },
+        "outputTokens": { "$ref": "#/$defs/tokenCount" },
+        "reasoningOutputTokens": { "$ref": "#/$defs/tokenCount" },
+        "totalTokens": { "$ref": "#/$defs/tokenCount" },
+        "estimatedUsd": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$" }
+          ]
+        },
+        "costStatus": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "serviceTier": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1, "maxLength": 128 }
+          ]
+        }
+      }
+    },
+    "tokenCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "agentEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "upstreamSeq", "payload"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "upstreamSeq": { "$ref": "#/$defs/upstreamSeq" },
+        "payload": { "type": "object" }
+      },
+      "$comment": "The bridge emits only the payload projections in docs/spec.md. The type remains open so a v1 consumer can safely ignore a future upstream event kind."
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshotVersion", "snapshot", "canonicalWorkspace"],
+      "properties": {
+        "snapshotVersion": { "const": 1 },
+        "snapshot": { "type": "object" },
+        "canonicalWorkspace": { "$ref": "#/$defs/absolutePath" }
+      }
+    },
+    "hello": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "type", "seq", "data"],
+      "properties": {
+        "protocol": { "const": "smithers.nanocodex" },
+        "version": { "const": 1 },
+        "type": { "const": "hello" },
+        "seq": { "const": 1 },
+        "data": {
+          "$ref": "capabilities-v1.schema.json"
+        }
+      }
+    },
+    "turnAccepted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "type", "seq", "requestId", "commandId", "sessionId", "data"],
+      "properties": {
+        "protocol": { "const": "smithers.nanocodex" },
+        "version": { "const": 1 },
+        "type": { "const": "turn.accepted" },
+        "seq": { "$ref": "#/$defs/seq" },
+        "requestId": { "$ref": "#/$defs/id" },
+        "commandId": { "$ref": "#/$defs/id" },
+        "sessionId": { "$ref": "#/$defs/id" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      }
+    },
+    "agentEventRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "type", "seq", "requestId", "sessionId", "data"],
+      "properties": {
+        "protocol": { "const": "smithers.nanocodex" },
+        "version": { "const": 1 },
+        "type": { "const": "agent.event" },
+        "seq": { "$ref": "#/$defs/seq" },
+        "requestId": { "$ref": "#/$defs/id" },
+        "sessionId": { "$ref": "#/$defs/id" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event"],
+          "properties": {
+            "event": { "$ref": "#/$defs/agentEvent" }
+          }
+        }
+      }
+    },
+    "agentEventTruncated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "type", "seq", "requestId", "sessionId", "data"],
+      "properties": {
+        "protocol": { "const": "smithers.nanocodex" },
+        "version": { "const": 1 },
+        "type": { "const": "agent.event-truncated" },
+        "seq": { "$ref": "#/$defs/seq" },
+        "requestId": { "$ref": "#/$defs/id" },
+        "sessionId": { "$ref": "#/$defs/id" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["upstreamType", "upstreamSeq", "reason"],
+          "properties": {
+            "upstreamType": {
+              "oneOf": [
+                { "type": "null" },
+                { "type": "string", "minLength": 1, "maxLength": 256 }
+              ]
+            },
+            "upstreamSeq": {
+              "oneOf": [
+                { "type": "null" },
+                { "$ref": "#/$defs/upstreamSeq" }
+              ]
+            },
+            "reason": {
+              "enum": [
+                "event_limit",
+                "aggregate_event_limit",
+                "bridge_event_backpressure",
+                "event_policy"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "commandAccepted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "type", "seq", "requestId", "commandId", "data"],
+      "properties": {
+        "protocol": { "const": "smithers.nanocodex" },
+        "version": { "const": 1 },
+        "type": { "const": "command.accepted" },
+        "seq": { "$ref": "#/$defs/seq" },
+        "requestId": { "$ref": "#/$defs/id" },
+        "commandId": { "$ref": "#/$defs/id" },
+        "sessionId": { "$ref": "#/$defs/id" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["command"],
+          "properties": {
+            "command": { "const": "turn.cancel" }
+          }
+        }
+      }
+    },
+    "commandRejected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "type", "seq", "requestId", "commandId", "data"],
+      "properties": {
+        "protocol": { "const": "smithers.nanocodex" },
+        "version": { "const": 1 },
+        "type": { "const": "command.rejected" },
+        "seq": { "$ref": "#/$defs/seq" },
+        "requestId": { "$ref": "#/$defs/id" },
+        "commandId": { "$ref": "#/$defs/id" },
+        "sessionId": { "$ref": "#/$defs/id" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["error"],
+          "properties": {
+            "error": { "$ref": "#/$defs/publicError" }
+          }
+        }
+      }
+    },
+    "turnCompleted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "type", "seq", "requestId", "sessionId", "data"],
+      "properties": {
+        "protocol": { "const": "smithers.nanocodex" },
+        "version": { "const": 1 },
+        "type": { "const": "turn.completed" },
+        "seq": { "$ref": "#/$defs/seq" },
+        "requestId": { "$ref": "#/$defs/id" },
+        "sessionId": { "$ref": "#/$defs/id" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["finalMessage", "usage", "snapshotVersion", "snapshot", "canonicalWorkspace"],
+          "properties": {
+            "finalMessage": { "type": "string" },
+            "usage": { "$ref": "#/$defs/usage" },
+            "snapshotVersion": { "const": 1 },
+            "snapshot": { "type": "object" },
+            "canonicalWorkspace": { "$ref": "#/$defs/absolutePath" }
+          }
+        }
+      }
+    },
+    "turnFailed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "type", "seq", "requestId", "sessionId", "data"],
+      "properties": {
+        "protocol": { "const": "smithers.nanocodex" },
+        "version": { "const": 1 },
+        "type": { "const": "turn.failed" },
+        "seq": { "$ref": "#/$defs/seq" },
+        "requestId": { "$ref": "#/$defs/id" },
+        "sessionId": { "$ref": "#/$defs/id" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["error"],
+          "properties": {
+            "error": { "$ref": "#/$defs/publicError" },
+            "completed": { "$ref": "#/$defs/recovery" }
+          },
+          "if": { "required": ["completed"] },
+          "then": {
+            "properties": {
+              "error": {
+                "allOf": [
+                  { "$ref": "#/$defs/publicError" },
+                  {
+                    "properties": {
+                      "code": { "const": "cleanup_failed" },
+                      "category": { "const": "cleanup" }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "turnCancelled": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "type", "seq", "requestId", "sessionId", "data"],
+      "properties": {
+        "protocol": { "const": "smithers.nanocodex" },
+        "version": { "const": 1 },
+        "type": { "const": "turn.cancelled" },
+        "seq": { "$ref": "#/$defs/seq" },
+        "requestId": { "$ref": "#/$defs/id" },
+        "sessionId": { "$ref": "#/$defs/id" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason"],
+          "properties": {
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$",
+              "$comment": "The normative maximum is 128 UTF-8 bytes."
+            }
+          }
+        }
+      }
+    },
+    "processFailed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "type", "seq", "data"],
+      "properties": {
+        "protocol": { "const": "smithers.nanocodex" },
+        "version": { "const": 1 },
+        "type": { "const": "process.failed" },
+        "seq": { "$ref": "#/$defs/seq" },
+        "requestId": { "$ref": "#/$defs/id" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["error"],
+          "properties": {
+            "error": { "$ref": "#/$defs/publicError" }
+          }
+        }
+      }
+    }
+  }
+}

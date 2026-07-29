@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://n0xmare.github.io/smithers-nanocodex/schema/client-v1.schema.json",
+  "title": "Smithers Nanocodex protocol v1 client record",
+  "$comment": "Byte and structural limits that JSON Schema cannot express are normative in docs/spec.md.",
+  "oneOf": [
+    { "$ref": "#/$defs/turnStart" },
+    { "$ref": "#/$defs/turnCancel" }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+    },
+    "absolutePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^/[^\\u0000]*$"
+    },
+    "snapshot": {
+      "type": "object"
+    },
+    "auth": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "environmentVariable"],
+          "properties": {
+            "mode": { "const": "api-key-env" },
+            "environmentVariable": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {
+            "mode": { "const": "chatgpt" },
+            "authFile": {
+              "oneOf": [
+                { "type": "null" },
+                { "type": "string" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "const": "websocket" }
+      }
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instructions": {
+          "type": ["string", "null"]
+        },
+        "thinking": {
+          "enum": ["none", "low", "medium", "high", "xhigh", "max", null]
+        },
+        "reasoningMode": {
+          "enum": ["standard", "pro", null]
+        },
+        "fastMode": {
+          "type": ["boolean", "null"]
+        }
+      }
+    },
+    "continuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "snapshot"],
+      "properties": {
+        "mode": { "const": "resume" },
+        "snapshot": { "$ref": "#/$defs/snapshot" }
+      }
+    },
+    "turnStart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "type", "commandId", "requestId", "data"],
+      "properties": {
+        "protocol": { "const": "smithers.nanocodex" },
+        "version": { "const": 1 },
+        "type": { "const": "turn.start" },
+        "commandId": { "$ref": "#/$defs/id" },
+        "requestId": { "$ref": "#/$defs/id" },
+        "sessionId": { "type": "null" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["prompt", "workspace", "auth", "transport"],
+          "properties": {
+            "prompt": { "type": "string" },
+            "workspace": { "$ref": "#/$defs/absolutePath" },
+            "auth": { "$ref": "#/$defs/auth" },
+            "transport": { "$ref": "#/$defs/transport" },
+            "options": { "$ref": "#/$defs/options", "default": {} },
+            "continuation": {
+              "oneOf": [{ "$ref": "#/$defs/continuation" }, { "type": "null" }],
+              "default": null
+            }
+          }
+        }
+      }
+    },
+    "turnCancel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version", "type", "commandId", "requestId", "data"],
+      "properties": {
+        "protocol": { "const": "smithers.nanocodex" },
+        "version": { "const": 1 },
+        "type": { "const": "turn.cancel" },
+        "commandId": { "$ref": "#/$defs/id" },
+        "requestId": { "$ref": "#/$defs/id" },
+        "sessionId": {
+          "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }]
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "reason": {
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$"
+                }
+              ],
+              "$comment": "The normative maximum is 128 UTF-8 bytes, not 128 Unicode scalar values."
+            }
+          }
+        }
+      }
+    }
+  }
+}

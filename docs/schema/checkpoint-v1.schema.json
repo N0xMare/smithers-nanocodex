@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://n0xmare.github.io/smithers-nanocodex/schema/checkpoint-v1.schema.json",
+  "title": "Smithers Nanocodex checkpoint envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["codec", "version", "payload"],
+  "properties": {
+    "codec": { "const": "nanocodex.session-snapshot" },
+    "version": { "const": 1 },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bridgeProtocolVersion",
+        "nanocodexVersion",
+        "snapshotVersion",
+        "canonicalWorkspace",
+        "policyFingerprint",
+        "nanocodexSnapshot"
+      ],
+      "properties": {
+        "bridgeProtocolVersion": { "const": 1 },
+        "nanocodexVersion": { "const": "0.3.0" },
+        "snapshotVersion": { "const": 1 },
+        "canonicalWorkspace": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^/[^\\u0000]*$"
+        },
+        "policyFingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "nanocodexSnapshot": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,39 @@
+# Dependency policy for the shipped x86_64 GNU/Linux binary.
+[graph]
+targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+
+[advisories]
+ignore = [
+    # RUSTSEC-2025-0057 reports that fxhash is unmaintained; it does not report
+    # a vulnerability. fxhash 0.2.1 is transitive through
+    # nanocodex-tools -> bm25, and the advisory has no safe upgrade. Accept
+    # only this advisory until upstream replaces it; all other advisories fail.
+    { id = "RUSTSEC-2025-0057", reason = "transitive via nanocodex-tools/bm25; unmaintained only and no safe upgrade is available" },
+]
+# Force removal of the exception when fxhash leaves the dependency graph.
+unused-ignored-advisory = "deny"
+
+[licenses]
+allow = [
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[licenses.private]
+ignore = false
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

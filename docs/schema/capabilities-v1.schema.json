@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://n0xmare.github.io/smithers-nanocodex/schema/capabilities-v1.schema.json",
+  "title": "Smithers Nanocodex protocol v1 capabilities",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bridgeVersion",
+    "target",
+    "nanocodexVersion",
+    "protocol",
+    "checkpoint",
+    "authenticationModes",
+    "transportModes",
+    "features",
+    "limits"
+  ],
+  "properties": {
+    "bridgeVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "target": { "const": "x86_64-unknown-linux-gnu" },
+    "nanocodexVersion": { "const": "0.3.0" },
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "versions"],
+      "properties": {
+        "name": { "const": "smithers.nanocodex" },
+        "versions": {
+          "type": "array",
+          "prefixItems": [{ "const": 1 }],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "codec",
+        "codecVersions",
+        "snapshotVersions",
+        "continuationModes",
+        "resumeRequiresSameCanonicalWorkspace"
+      ],
+      "properties": {
+        "codec": { "const": "nanocodex.session-snapshot" },
+        "codecVersions": {
+          "type": "array",
+          "prefixItems": [{ "const": 1 }],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "snapshotVersions": {
+          "type": "array",
+          "prefixItems": [{ "const": 1 }],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "continuationModes": {
+          "type": "array",
+          "prefixItems": [{ "const": "resume" }],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "resumeRequiresSameCanonicalWorkspace": { "const": true }
+      }
+    },
+    "authenticationModes": {
+      "type": "array",
+      "prefixItems": [{ "const": "api-key-env" }, { "const": "chatgpt" }],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "transportModes": {
+      "type": "array",
+      "prefixItems": [{ "const": "websocket" }],
+      "items": false,
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "codeMode",
+        "codeModeDisable",
+        "websocketHttpsFallback",
+        "customEndpoints",
+        "mcp",
+        "subagents",
+        "steering",
+        "workspaceRelocation"
+      ],
+      "properties": {
+        "codeMode": { "const": true },
+        "codeModeDisable": { "const": false },
+        "websocketHttpsFallback": { "const": true },
+        "customEndpoints": { "const": false },
+        "mcp": { "const": false },
+        "subagents": { "const": false },
+        "steering": { "const": false },
+        "workspaceRelocation": { "const": false }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxInputRecordBytes",
+        "maxOutputRecordBytes",
+        "maxPromptBytes",
+        "maxSnapshotBytes",
+        "maxEventBytes",
+        "maxEventTotalBytes",
+        "maxStderrBytes",
+        "maxCommandRecords",
+        "maxJsonDepth",
+        "maxJsonNodes",
+        "maxJsonObjectMembers",
+        "maxJsonArrayElements",
+        "maxJsonStringBytes",
+        "maxJsonKeyBytes",
+        "maxManagedAuthFileBytes"
+      ],
+      "properties": {
+        "maxInputRecordBytes": { "const": 25165824 },
+        "maxOutputRecordBytes": { "const": 41943040 },
+        "maxPromptBytes": { "const": 4194304 },
+        "maxSnapshotBytes": { "const": 15728640 },
+        "maxEventBytes": { "const": 1048576 },
+        "maxEventTotalBytes": { "const": 16777216 },
+        "maxStderrBytes": { "const": 65536 },
+        "maxCommandRecords": { "const": 256 },
+        "maxJsonDepth": { "const": 64 },
+        "maxJsonNodes": { "const": 262144 },
+        "maxJsonObjectMembers": { "const": 16384 },
+        "maxJsonArrayElements": { "const": 131072 },
+        "maxJsonStringBytes": { "const": 18874368 },
+        "maxJsonKeyBytes": { "const": 1024 },
+        "maxManagedAuthFileBytes": { "const": 1048576 }
+      }
+    }
+  }
+}
