@@ -184,6 +184,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             "dist/${{ needs.package.outputs.archive }}" \
             "dist/${{ needs.package.outputs.archive }}.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --generate-notes \
             --title "smithers-nanocodex $GITHUB_REF_NAME"
