@@ -43,6 +43,28 @@ fn lowercase_hex(bytes: &[u8]) -> String {
     output
 }
 
+fn capabilities_for_published_target(
+    mut capabilities: Value,
+    published_target: &Value,
+    is_published_target: bool,
+) -> Value {
+    assert!(
+        published_target
+            .as_str()
+            .is_some_and(|target| !target.is_empty()),
+        "published capability target must be a non-empty string"
+    );
+    if is_published_target {
+        assert_eq!(
+            capabilities["target"], *published_target,
+            "published build must report its exact release target"
+        );
+    } else {
+        capabilities["target"] = published_target.clone();
+    }
+    capabilities
+}
+
 #[test]
 fn schemas_and_protocol_fixtures_are_valid_json() {
     let root = repository_root();
@@ -129,11 +151,20 @@ fn schemas_and_protocol_fixtures_are_valid_json() {
             });
     }
 
-    let capabilities =
+    let runtime =
         serde_json::to_value(Capabilities::current()).expect("serialize runtime capabilities");
+    let capabilities = capabilities_for_published_target(
+        runtime,
+        &schemas["capabilities-v1.schema.json"]["properties"]["target"]["const"],
+        cfg!(all(
+            target_os = "linux",
+            target_arch = "x86_64",
+            target_env = "gnu"
+        )),
+    );
     validator("capabilities-v1.schema.json")
         .validate(&capabilities)
-        .expect("runtime capabilities must satisfy their schema");
+        .expect("published capabilities must satisfy their schema");
 }
 
 #[test]
@@ -146,14 +177,36 @@ fn golden_hello_capabilities_match_the_implementation() {
     let hello = records.first().expect("server fixture has a hello record");
 
     assert_eq!(hello["type"], "hello");
+    let runtime = serde_json::to_value(Capabilities::current()).expect("serialize capabilities");
+    // The published v1 artifact is Linux x86_64 only. Other CI hosts still
+    // verify every platform-independent capability field.
+    let runtime = capabilities_for_published_target(
+        runtime,
+        &hello["data"]["target"],
+        cfg!(all(
+            target_os = "linux",
+            target_arch = "x86_64",
+            target_env = "gnu"
+        )),
+    );
+    assert_eq!(hello["data"], runtime);
+}
+
+#[test]
+fn capability_contract_normalization_changes_only_the_build_target() {
     let mut runtime =
         serde_json::to_value(Capabilities::current()).expect("serialize capabilities");
-    if !cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        // The published v1 artifact is Linux x86_64 only. Other CI hosts still
-        // verify every platform-independent capability field.
-        runtime["target"] = hello["data"]["target"].clone();
-    }
-    assert_eq!(hello["data"], runtime);
+    runtime["target"] = json!("aarch64-apple-darwin");
+
+    let normalized = capabilities_for_published_target(
+        runtime.clone(),
+        &json!("x86_64-unknown-linux-gnu"),
+        false,
+    );
+
+    assert_eq!(normalized["target"], "x86_64-unknown-linux-gnu");
+    runtime["target"] = normalized["target"].clone();
+    assert_eq!(normalized, runtime);
 }
 
 #[test]
