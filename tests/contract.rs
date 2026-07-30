@@ -3,7 +3,13 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use smithers_nanocodex::Capabilities;
+use smithers_nanocodex::{
+    Capabilities,
+    capabilities::{
+        BRIDGE_PROTOCOL_NAME, BRIDGE_PROTOCOL_VERSION, CHECKPOINT_CODEC, CHECKPOINT_CODEC_VERSION,
+        NANOCODEX_VERSION, SNAPSHOT_VERSION,
+    },
+};
 
 fn repository_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -230,6 +236,85 @@ fn capability_schema_constants_match_the_implementation() {
     for (name, value) in actual {
         assert_eq!(expected[name]["const"], *value, "limit {name}");
     }
+}
+
+#[test]
+fn qualified_release_baseline_is_an_immutable_consumer_pin() {
+    const VERSION: &str = "0.0.1";
+    const TARGET: &str = "x86_64-unknown-linux-gnu";
+    const TAG_COMMIT: &str = "56d8b4fd54bf14e9f2874e5a010b8e301f8f695b";
+    const ARCHIVE_SHA256: &str = "0e14425b3e0af5c3b1663b4db2a15302cbaa7c03e917babd841ae7fde2a1ab73";
+
+    let baseline = parse_json(
+        &repository_root()
+            .join("docs")
+            .join("releases")
+            .join("v0.0.1.json"),
+    );
+    let archive = format!("smithers-nanocodex-v{VERSION}-{TARGET}.tar.gz");
+
+    assert_eq!(baseline["schemaVersion"], 1);
+    assert_eq!(
+        baseline["baselineId"],
+        format!("smithers-nanocodex/v{VERSION}/{TARGET}")
+    );
+    assert_eq!(baseline["status"], "qualified");
+    assert_eq!(baseline["release"]["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(baseline["release"]["version"], VERSION);
+    assert_eq!(baseline["release"]["tag"], format!("v{VERSION}"));
+    assert_eq!(baseline["release"]["tagCommit"], TAG_COMMIT);
+    assert_eq!(baseline["release"]["publishedAt"], "2026-07-29T23:57:32Z");
+    assert_eq!(
+        baseline["release"]["url"],
+        format!("https://github.com/N0xMare/smithers-nanocodex/releases/tag/v{VERSION}")
+    );
+
+    assert_eq!(baseline["artifact"]["target"], TARGET);
+    assert_eq!(baseline["artifact"]["fileName"], archive);
+    assert_eq!(
+        baseline["artifact"]["downloadUrl"],
+        format!(
+            "https://github.com/N0xMare/smithers-nanocodex/releases/download/v{VERSION}/{archive}"
+        )
+    );
+    assert_eq!(baseline["artifact"]["sha256"], ARCHIVE_SHA256);
+    assert_eq!(baseline["artifact"]["sizeBytes"], 6_286_271);
+    assert_eq!(baseline["artifact"]["minimumGlibcVersion"], "2.35");
+    assert_eq!(ARCHIVE_SHA256.len(), 64);
+    assert!(
+        ARCHIVE_SHA256
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    );
+
+    assert_eq!(baseline["contract"]["bridgeVersion"], VERSION);
+    assert_eq!(baseline["contract"]["nanocodexVersion"], NANOCODEX_VERSION);
+    assert_eq!(
+        baseline["contract"]["protocol"],
+        format!("{BRIDGE_PROTOCOL_NAME}/{BRIDGE_PROTOCOL_VERSION}")
+    );
+    assert_eq!(
+        baseline["contract"]["checkpointCodec"],
+        format!("{CHECKPOINT_CODEC}/{CHECKPOINT_CODEC_VERSION}")
+    );
+    assert_eq!(baseline["contract"]["snapshotVersion"], SNAPSHOT_VERSION);
+    let policy_fixture = parse_json(
+        &repository_root()
+            .join("docs")
+            .join("fixtures")
+            .join("policy-fingerprint-v1.json"),
+    );
+    assert_eq!(
+        baseline["contract"]["policyFingerprint"],
+        policy_fixture["algorithm"]
+    );
+    assert_eq!(baseline["qualification"]["bridgeArtifact"], true);
+    assert_eq!(baseline["qualification"]["smithersAdapter"], false);
+    assert!(
+        baseline["qualification"]["checks"]
+            .as_array()
+            .is_some_and(|checks| !checks.is_empty())
+    );
 }
 
 #[test]

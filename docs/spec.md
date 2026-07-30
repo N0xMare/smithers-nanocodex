@@ -5,6 +5,7 @@
 - Wire protocol: `smithers.nanocodex/1`
 - Checkpoint codec: `nanocodex.session-snapshot/1`
 - Policy fingerprint: `smithers.nanocodex.policy-fingerprint/1`
+- Qualified artifact: [`releases/v0.0.1.json`](releases/v0.0.1.json)
 - Status: normative
 
 ## 1. Scope and conformance

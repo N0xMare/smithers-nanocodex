@@ -48,6 +48,12 @@ vectors.
 - Checkpoints: `nanocodex.session-snapshot/1`, resume only
 - Release target: x86_64 GNU/Linux, glibc 2.35 or newer (Ubuntu 22.04 baseline)
 
+The immutable consumer pin for the qualified release artifact is
+[`docs/releases/v0.0.1.json`](docs/releases/v0.0.1.json). Future Smithers
+integration work should select the matching target, download that exact archive,
+verify its recorded SHA-256 digest, and then validate the runtime capabilities
+before launching it.
+
 A conforming Smithers deployment additionally requires an executable Bubblewrap
 and usable private PID namespaces. Releasing this bridge is an input to the
 separate Smithers adapter work; it does not by itself claim that adapter has
@@ -169,7 +175,11 @@ does not contain or publish Smithers' JavaScript integration.
 
 Releases publish an `x86_64-unknown-linux-gnu` archive and SHA-256 checksum. A
 tag must exactly match the package version; tagging and pushing remain explicit
-maintainer actions.
+maintainer actions. The v0.0.1 archive qualified for the Smithers bridge
+baseline is pinned by tag commit, byte length, and digest in
+[`docs/releases/v0.0.1.json`](docs/releases/v0.0.1.json). A published baseline
+manifest is immutable; a newly qualified release gets a new manifest rather
+than changing an existing pin.
 
 ```bash
 sha256sum --check smithers-nanocodex-v0.0.1-x86_64-unknown-linux-gnu.tar.gz.sha256
