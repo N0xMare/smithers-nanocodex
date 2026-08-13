@@ -68,16 +68,6 @@
         <td>Apache-2.0 OR MIT</td>
       </tr>
       <tr>
-        <td><a href="https://github.com/aws/aws-lc-rs">aws-lc-rs</a></td>
-        <td>1.17.3</td>
-        <td>ISC AND (Apache-2.0 OR ISC)</td>
-      </tr>
-      <tr>
-        <td><a href="https://github.com/aws/aws-lc-rs">aws-lc-sys</a></td>
-        <td>0.43.0</td>
-        <td>ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0)</td>
-      </tr>
-      <tr>
         <td><a href="https://github.com/marshallpierce/rust-base64">base64</a></td>
         <td>0.22.1</td>
         <td>MIT OR Apache-2.0</td>
@@ -171,6 +161,16 @@
         <td><a href="https://github.com/RustCrypto/formats">const-oid</a></td>
         <td>0.10.2</td>
         <td>Apache-2.0 OR MIT</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/servo/core-foundation-rs">core-foundation</a></td>
+        <td>0.10.1</td>
+        <td>MIT OR Apache-2.0</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/servo/core-foundation-rs">core-foundation-sys</a></td>
+        <td>0.8.7</td>
+        <td>MIT OR Apache-2.0</td>
       </tr>
       <tr>
         <td><a href="https://github.com/RustCrypto/utils">cpufeatures</a></td>
@@ -493,6 +493,11 @@
         <td>Unlicense OR MIT</td>
       </tr>
       <tr>
+        <td><a href="https://github.com/Gilnaa/memoffset">memoffset</a></td>
+        <td>0.9.1</td>
+        <td>MIT</td>
+      </tr>
+      <tr>
         <td><a href="https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide">miniz_oxide</a></td>
         <td>0.8.9</td>
         <td>MIT OR Zlib OR Apache-2.0</td>
@@ -509,27 +514,27 @@
       </tr>
       <tr>
         <td><a href="https://github.com/gakonst/nanocodex">nanocodex</a></td>
-        <td>0.3.0</td>
+        <td>0.5.0</td>
         <td>MIT OR Apache-2.0</td>
       </tr>
       <tr>
         <td><a href="https://github.com/gakonst/nanocodex">nanocodex-agent</a></td>
-        <td>0.3.0</td>
+        <td>0.5.0</td>
         <td>MIT OR Apache-2.0</td>
       </tr>
       <tr>
         <td><a href="https://github.com/gakonst/nanocodex">nanocodex-oai-api</a></td>
-        <td>0.3.0</td>
+        <td>0.5.0</td>
         <td>MIT OR Apache-2.0</td>
       </tr>
       <tr>
         <td><a href="https://github.com/gakonst/nanocodex">nanocodex-tools</a></td>
-        <td>0.3.0</td>
+        <td>0.5.0</td>
         <td>MIT OR Apache-2.0</td>
       </tr>
       <tr>
         <td><a href="https://github.com/gakonst/nanocodex">nanocodex-tools-macros</a></td>
-        <td>0.3.0</td>
+        <td>0.5.0</td>
         <td>MIT OR Apache-2.0</td>
       </tr>
       <tr>
@@ -648,6 +653,11 @@
         <td>MIT OR Apache-2.0</td>
       </tr>
       <tr>
+        <td><a href="https://github.com/briansmith/ring">ring</a></td>
+        <td>0.17.14</td>
+        <td>Apache-2.0 AND ISC</td>
+      </tr>
+      <tr>
         <td><a href="https://github.com/modelcontextprotocol/rust-sdk/">rmcp</a></td>
         <td>1.8.0</td>
         <td>Apache-2.0</td>
@@ -706,6 +716,16 @@
         <td><a href="https://github.com/GREsau/schemars">schemars_derive</a></td>
         <td>0.8.22</td>
         <td>MIT</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/kornelski/rust-security-framework">security-framework</a></td>
+        <td>3.7.0</td>
+        <td>MIT OR Apache-2.0</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/kornelski/rust-security-framework">security-framework-sys</a></td>
+        <td>2.17.0</td>
+        <td>MIT OR Apache-2.0</td>
       </tr>
       <tr>
         <td><a href="https://github.com/serde-rs/serde">serde</a></td>
@@ -789,7 +809,7 @@
       </tr>
       <tr>
         <td><a href="https://github.com/N0xMare/smithers-nanocodex">smithers-nanocodex</a></td>
-        <td>0.0.1</td>
+        <td>0.0.2</td>
         <td>MIT</td>
       </tr>
       <tr>
@@ -4672,6 +4692,8 @@ limitations under the License.</pre>
         <li><code>base64 0.22.1</code></li>
         <li><code>bitflags 2.13.1</code></li>
         <li><code>cfg-if 1.0.4</code></li>
+        <li><code>core-foundation-sys 0.8.7</code></li>
+        <li><code>core-foundation 0.10.1</code></li>
         <li><code>displaydoc 0.2.7</code></li>
         <li><code>equivalent 1.0.2</code></li>
         <li><code>errno 0.3.14</code></li>
@@ -4693,9 +4715,12 @@ limitations under the License.</pre>
         <li><code>openssl-probe 0.2.1</code></li>
         <li><code>percent-encoding 2.3.2</code></li>
         <li><code>png 0.18.1</code></li>
+        <li><code>ring 0.17.14</code></li>
         <li><code>rustix 1.1.4</code></li>
         <li><code>rustls-native-certs 0.8.4</code></li>
         <li><code>rustls 0.23.42</code></li>
+        <li><code>security-framework-sys 2.17.0</code></li>
+        <li><code>security-framework 3.7.0</code></li>
         <li><code>signal-hook-registry 1.4.8</code></li>
         <li><code>smallvec 1.15.2</code></li>
         <li><code>socket2 0.6.5</code></li>
@@ -6032,7 +6057,6 @@ limitations under the License.
         <li><code>allocator-api2 0.2.21</code></li>
         <li><code>anyhow 1.0.104</code></li>
         <li><code>async-trait 0.1.89</code></li>
-        <li><code>aws-lc-sys 0.43.0</code></li>
         <li><code>dyn-clone 1.0.20</code></li>
         <li><code>fdeflate 0.3.7</code></li>
         <li><code>fxhash 0.2.1</code></li>
@@ -6041,11 +6065,11 @@ limitations under the License.
         <li><code>itoa 1.0.18</code></li>
         <li><code>libc 0.2.189</code></li>
         <li><code>miniz_oxide 0.8.9</code></li>
-        <li><code>nanocodex-agent 0.3.0</code></li>
-        <li><code>nanocodex-oai-api 0.3.0</code></li>
-        <li><code>nanocodex-tools-macros 0.3.0</code></li>
-        <li><code>nanocodex-tools 0.3.0</code></li>
-        <li><code>nanocodex 0.3.0</code></li>
+        <li><code>nanocodex-agent 0.5.0</code></li>
+        <li><code>nanocodex-oai-api 0.5.0</code></li>
+        <li><code>nanocodex-tools-macros 0.5.0</code></li>
+        <li><code>nanocodex-tools 0.5.0</code></li>
+        <li><code>nanocodex 0.5.0</code></li>
         <li><code>pin-project-lite 0.2.17</code></li>
         <li><code>proc-macro2 1.0.107</code></li>
         <li><code>quote 1.0.47</code></li>
@@ -6433,7 +6457,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <h3>BSD 3-Clause &quot;New&quot; or &quot;Revised&quot; License (BSD-3-Clause)</h3>
       <p>Applies to:</p>
       <ul>
-        <li><code>aws-lc-sys 0.43.0</code></li>
         <li><code>sha1_smol 1.0.1</code></li>
       </ul>
       <pre>Copyright (c) &lt;year&gt; &lt;owner&gt;. 
@@ -6474,6 +6497,27 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&
       <h3>ISC License (ISC)</h3>
       <p>Applies to:</p>
       <ul>
+        <li><code>ring 0.17.14</code></li>
+      </ul>
+      <pre>Copyright 2015-2025 Brian Smith.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot; AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
+OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+</pre>
+    </section>
+    <section class="license-record" data-license-index="30">
+      <h3>ISC License (ISC)</h3>
+      <p>Applies to:</p>
+      <ul>
         <li><code>rustls-webpki 0.103.13</code></li>
       </ul>
       <pre>Except as otherwise noted, this project is licensed under the following
@@ -6495,23 +6539,6 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 The files under third-party/chromium are licensed as described in
 third-party/chromium/LICENSE.
-</pre>
-    </section>
-    <section class="license-record" data-license-index="30">
-      <h3>ISC License (ISC)</h3>
-      <p>Applies to:</p>
-      <ul>
-        <li><code>aws-lc-rs 1.17.3</code></li>
-        <li><code>aws-lc-sys 0.43.0</code></li>
-      </ul>
-      <pre>ISC License:
-
-Copyright (c) 2004-2010 by Internet Systems Consortium, Inc. (&quot;ISC&quot;)
-Copyright (c) 1995-2003 by Internet Software Consortium
-
-Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED &quot;AS IS&quot; AND ISC DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 </pre>
     </section>
     <section class="license-record" data-license-index="31">
@@ -6600,6 +6627,32 @@ THE SOFTWARE.
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
+        <li><code>memoffset 0.9.1</code></li>
+      </ul>
+      <pre>Copyright (c) 2017 Gilad Naaman
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the &quot;Software&quot;), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</pre>
+    </section>
+    <section class="license-record" data-license-index="35">
+      <h3>MIT License (MIT)</h3>
+      <p>Applies to:</p>
+      <ul>
         <li><code>bytes 1.12.1</code></li>
       </ul>
       <pre>Copyright (c) 2018 Carl Lerche
@@ -6629,7 +6682,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="35">
+    <section class="license-record" data-license-index="36">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -6657,7 +6710,7 @@ THE SOFTWARE.
 
 </pre>
     </section>
-    <section class="license-record" data-license-index="36">
+    <section class="license-record" data-license-index="37">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -6686,7 +6739,7 @@ THE SOFTWARE.
 
 </pre>
     </section>
-    <section class="license-record" data-license-index="37">
+    <section class="license-record" data-license-index="38">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -6719,7 +6772,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="38">
+    <section class="license-record" data-license-index="39">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -6754,7 +6807,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="39">
+    <section class="license-record" data-license-index="40">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -6789,7 +6842,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="40">
+    <section class="license-record" data-license-index="41">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -6822,7 +6875,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="41">
+    <section class="license-record" data-license-index="42">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -6856,7 +6909,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="42">
+    <section class="license-record" data-license-index="43">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -6883,7 +6936,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="43">
+    <section class="license-record" data-license-index="44">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -6898,7 +6951,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="44">
+    <section class="license-record" data-license-index="45">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -6928,7 +6981,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="45">
+    <section class="license-record" data-license-index="46">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -6958,7 +7011,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="46">
+    <section class="license-record" data-license-index="47">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -6988,7 +7041,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="47">
+    <section class="license-record" data-license-index="48">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -7018,7 +7071,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="48">
+    <section class="license-record" data-license-index="49">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -7047,11 +7100,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="49">
+    <section class="license-record" data-license-index="50">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
-        <li><code>smithers-nanocodex 0.0.1</code></li>
+        <li><code>smithers-nanocodex 0.0.2</code></li>
       </ul>
       <pre>MIT License
 
@@ -7076,7 +7129,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="50">
+    <section class="license-record" data-license-index="51">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -7102,7 +7155,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTI
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="51">
+    <section class="license-record" data-license-index="52">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -7133,7 +7186,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="52">
+    <section class="license-record" data-license-index="53">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -7162,7 +7215,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="53">
+    <section class="license-record" data-license-index="54">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -7193,7 +7246,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="54">
+    <section class="license-record" data-license-index="55">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -7219,7 +7272,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="55">
+    <section class="license-record" data-license-index="56">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -7250,7 +7303,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="56">
+    <section class="license-record" data-license-index="57">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -7280,7 +7333,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="57">
+    <section class="license-record" data-license-index="58">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -7311,7 +7364,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 </pre>
     </section>
-    <section class="license-record" data-license-index="58">
+    <section class="license-record" data-license-index="59">
       <h3>MIT License (MIT)</h3>
       <p>Applies to:</p>
       <ul>
@@ -7321,36 +7374,6 @@ SOFTWARE.
 
 Copyright (c) 2015-2020 Julien Cretin
 Copyright (c) 2017-2020 Google Inc.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the &quot;Software&quot;), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-</pre>
-    </section>
-    <section class="license-record" data-license-index="59">
-      <h3>MIT License (MIT)</h3>
-      <p>Applies to:</p>
-      <ul>
-        <li><code>aws-lc-sys 0.43.0</code></li>
-      </ul>
-      <pre>The MIT License (MIT)
-
-Copyright (c) 2015-2020 the fiat-crypto authors (see
-https://github.com/mit-plv/fiat-crypto/blob/master/AUTHORS).
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the &quot;Software&quot;), to deal

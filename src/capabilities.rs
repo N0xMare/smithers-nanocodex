@@ -7,10 +7,12 @@ use crate::strict_json::{
 
 pub const BRIDGE_PROTOCOL_NAME: &str = "smithers.nanocodex";
 pub const BRIDGE_PROTOCOL_VERSION: u16 = 1;
-pub const NANOCODEX_VERSION: &str = "0.3.0";
+pub const NANOCODEX_VERSION: &str = "0.5.0";
+pub const TOOL_PROFILE: &str = "nanocodex-stock-0.5.0";
 pub const CHECKPOINT_CODEC: &str = "nanocodex.session-snapshot";
 pub const CHECKPOINT_CODEC_VERSION: u16 = 1;
 pub const SNAPSHOT_VERSION: u32 = 1;
+pub const SHIPPED_TARGETS: &[&str] = &["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"];
 
 pub const MAX_INPUT_RECORD_BYTES: usize = 24 * 1024 * 1024;
 pub const MAX_OUTPUT_RECORD_BYTES: usize = 40 * 1024 * 1024;
@@ -147,6 +149,18 @@ mod tests {
     fn capabilities_are_explicit_and_resume_only() {
         let capabilities = Capabilities::current();
         assert_eq!(capabilities.protocol.versions, [1]);
+        assert_eq!(capabilities.nanocodex_version, NANOCODEX_VERSION);
+        assert_eq!(TOOL_PROFILE, "nanocodex-stock-0.5.0");
+        assert_eq!(
+            SHIPPED_TARGETS,
+            &["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"]
+        );
+        assert_eq!(capabilities.target, env!("SMITHERS_NANOCODEX_TARGET"));
+        assert!(
+            SHIPPED_TARGETS.contains(&capabilities.target),
+            "runtime target {} is not a shipped 0.0.2 triple",
+            capabilities.target
+        );
         assert_eq!(capabilities.checkpoint.continuation_modes, ["resume"]);
         assert!(capabilities.features.code_mode);
         assert!(capabilities.features.websocket_https_fallback);

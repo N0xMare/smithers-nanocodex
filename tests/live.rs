@@ -64,10 +64,13 @@ fn run_live_turn(start: Value) -> LiveTurn {
         .filter(|line| !line.is_empty())
         .map(|line| serde_json::from_slice::<Value>(line).expect("live output was not JSONL"))
         .collect::<Vec<_>>();
-    assert!(
-        records.first().and_then(|record| record["type"].as_str()) == Some("hello"),
-        "live bridge omitted its hello record"
-    );
+    let hello = records
+        .first()
+        .expect("live bridge omitted its hello record");
+    assert_eq!(hello["type"], "hello");
+    assert_eq!(hello["data"]["bridgeVersion"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(hello["data"]["nanocodexVersion"], "0.5.0");
+    assert_eq!(hello["data"]["target"], env!("SMITHERS_NANOCODEX_TARGET"));
     assert!(
         output.status.success(),
         "live bridge process exited unsuccessfully"

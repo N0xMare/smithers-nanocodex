@@ -1,11 +1,13 @@
 # Smithers–Nanocodex Contract
 
-- Contract revision: `1.0.0`
-- Bridge release baseline: `smithers-nanocodex 0.0.1`
+- Contract revision: `1.1.0`
+- Bridge release baseline: `smithers-nanocodex 0.0.2`
 - Wire protocol: `smithers.nanocodex/1`
 - Checkpoint codec: `nanocodex.session-snapshot/1`
 - Policy fingerprint: `smithers.nanocodex.policy-fingerprint/1`
-- Qualified artifact: [`releases/v0.0.1.json`](releases/v0.0.1.json)
+- Tool profile: `nanocodex-stock-0.5.0`
+- Current contract pin: [`releases/v0.0.2.json`](releases/v0.0.2.json)
+- Historical qualified pin: [`releases/v0.0.1.json`](releases/v0.0.1.json)
 - Status: normative
 
 ## 1. Scope and conformance
@@ -15,8 +17,10 @@ external Smithers `NanocodexAgent`. It covers one bridge process, one accepted
 Nanocodex turn, and one optional same-workspace continuation.
 
 The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY have their RFC 2119
-meanings. A conforming bridge implements sections 3 through 9. A conforming
-Smithers adapter implements sections 10 through 13 as well.
+meanings. A conforming bridge implements sections 3 through 9. Sections 10
+through 13 are the adapter contract: they are normative for a Smithers
+`NanocodexAgent` implemented outside this repository, and informative for
+this crate's implementation. This repository does not contain that adapter.
 
 Machine-readable companions are:
 
@@ -28,6 +32,7 @@ Machine-readable companions are:
 - [`fixtures/client-cancel-v1.jsonl`](fixtures/client-cancel-v1.jsonl)
 - [`fixtures/server-success-v1.jsonl`](fixtures/server-success-v1.jsonl)
 - [`fixtures/checkpoint-v1.json`](fixtures/checkpoint-v1.json)
+- [`fixtures/checkpoint-v0.0.1-rejected.json`](fixtures/checkpoint-v0.0.1-rejected.json)
 - [`fixtures/policy-fingerprint-v1.json`](fixtures/policy-fingerprint-v1.json)
 
 The JSONL and checkpoint fixtures are schema/shape examples. Their synthetic
@@ -37,9 +42,9 @@ Nanocodex snapshots and prove typed, fresh-process resume; the policy
 fingerprint fixture is the only byte-for-byte golden-vector set.
 
 The schemas describe JSON shapes. Requirements stated here for UTF-8 byte
-length, canonical paths, parser resources, ordering, durability, process
-containment, and cross-record state remain normative when JSON Schema cannot
-express them.
+length, canonical paths, parser resources, ordering, durability, adapter
+process lifecycle, and cross-record state remain normative when JSON Schema
+cannot express them.
 
 ## 2. Fixed baseline and deliberate exclusions
 
@@ -47,13 +52,14 @@ Protocol v1 has this fixed baseline:
 
 | Item | Value |
 | --- | --- |
-| Bridge package | `smithers-nanocodex 0.0.1` |
-| Nanocodex crate | exactly `0.3.0` |
+| Bridge package | `smithers-nanocodex 0.0.2` |
+| Nanocodex crate | exactly `0.5.0` |
 | Rust toolchain | `1.97` |
-| Model | Nanocodex 0.3.0 stock model (`gpt-5.6-sol`) |
+| Model | Nanocodex 0.5.0 stock model (`gpt-5.6-sol`) |
 | Native Code Mode | enabled; not disableable |
 | Stock tool families | enabled |
-| Released target | `x86_64-unknown-linux-gnu` |
+| Tool policy profile | `nanocodex-stock-0.5.0` |
+| Released targets | `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin` |
 | Continuation | same-canonical-workspace `resume` only |
 
 Protocol v1 does not support a daemon, process pool, more than one accepted
@@ -64,6 +70,10 @@ private default instructions.
 
 `options.instructions` is a complete replacement. Omitting it or sending
 `null` selects the stock instructions.
+
+A 0.0.1 / Nanocodex 0.3.0 / `nanocodex-stock-0.3.0` checkpoint MUST NOT resume
+on this baseline. The adapter rejects it on Nanocodex version mismatch and on
+policy-fingerprint mismatch before spawn.
 
 ## 3. Executable and capabilities
 
@@ -83,9 +93,11 @@ workspace mutation, or Nanocodex construction. It emits one JSON value matching
 protocol version other than `1` is rejected before the JSONL server starts.
 
 Compatibility is decided from `hello.data`, not from bridge semantic version
-alone. For this contract, protocol name/version, Nanocodex version, target,
-checkpoint versions, ordered mode arrays, feature booleans, and limits MUST
-match the capability schema. `bridgeVersion` is informational.
+alone. For this contract, protocol name/version, Nanocodex version, a shipped
+`target` rustc triple, checkpoint versions, ordered mode arrays, feature
+booleans, and limits MUST match the capability schema. `bridgeVersion` is
+informational. `target` is the triple the binary was compiled for, not a host
+policy string.
 
 The exact v1 limits are:
 
@@ -644,7 +656,11 @@ pool remains Tokio-managed for portable stdin and native operations. After
 `serve` returns, runtime shutdown is bounded to 100 ms so an outstanding
 portable stdin read cannot keep the process alive.
 
-## 10. Smithers checkpoint contract
+## 10. Smithers adapter: checkpoint contract
+
+Sections 10–13 specify the external Smithers `NanocodexAgent`. They are
+normative for that adapter and are published here so the worker's handshake,
+checkpoint envelope, and spawn assumptions stay unambiguous.
 
 ### 10.1 Envelope and validation
 
@@ -665,10 +681,10 @@ The exact durable envelope is:
   "version": 1,
   "payload": {
     "bridgeProtocolVersion": 1,
-    "nanocodexVersion": "0.3.0",
+    "nanocodexVersion": "0.5.0",
     "snapshotVersion": 1,
     "canonicalWorkspace": "/absolute/canonical/worktree",
-    "policyFingerprint": "sha256:e4580c36cd5e0b89d1bdc7aeda2c3664ca61d239fdd9807e6b62019b81dbde86",
+    "policyFingerprint": "sha256:1faa485a45bd4bf1977f3cfb92b66656e3be9e3348dcee9490c8b0f7eb47fbd4",
     "nanocodexSnapshot": {}
   }
 }
@@ -676,7 +692,16 @@ The exact durable envelope is:
 
 All objects have exactly the fields shown. The adapter MUST reject a codec,
 version, bridge protocol, Nanocodex version, snapshot version, canonical
-workspace, or policy fingerprint mismatch before spawning the bridge.
+workspace, or policy fingerprint mismatch before spawning the bridge. A
+0.0.1 / Nanocodex 0.3.0 envelope is therefore rejected even though it still
+uses codec v1 / snapshot v1 / protocol v1; `snapshotVersion` is not the
+incompatibility signal.
+
+The release pin's `contract.policyFingerprint` field is the algorithm
+identifier (`smithers.nanocodex.policy-fingerprint/1`). The checkpoint
+envelope's `payload.policyFingerprint` field is the SHA-256 digest
+(`sha256:` plus 64 lowercase hex digits). Those two strings are not
+interchangeable.
 
 The checkpoint must be stable JSON: plain objects/arrays, enumerable data
 properties, no cycles, no holes or extra array properties, finite numbers, no
@@ -714,7 +739,7 @@ Define `J(s)` as a JSON string encoder with these exact rules:
 Construct exactly, with no spaces, BOM, or newline:
 
 ```text
-{"fingerprintVersion":1,"instructions":I,"tools":{"profile":"nanocodex-stock-0.3.0","codeMode":true,"mcp":false,"subagents":false}}
+{"fingerprintVersion":1,"instructions":I,"tools":{"profile":"nanocodex-stock-0.5.0","codeMode":true,"mcp":false,"subagents":false}}
 ```
 
 where `I` is ASCII `null` or `J(instructions)`. Member order is fixed as shown;
@@ -764,7 +789,7 @@ The recovery checkpoint may be attached non-enumerably for in-process recovery,
 but ordinary error serialization MUST NOT include it. Callback failure still
 wins and is returned directly.
 
-## 11. Smithers timers and cancellation escalation
+## 11. Smithers adapter: timers and cancellation escalation
 
 Total timeout, idle timeout, and abort are external Smithers concerns. Timer
 values MUST be nonnegative safe integers no larger than `2^31 - 1` ms and MUST
@@ -789,87 +814,56 @@ grace, sends SIGTERM, then SIGKILL, and verifies closure. If cancellation occurs
 while `turn.start` is backpressured, it waits only within that same cancel grace,
 queues cancellation behind the completed start write, and then escalates.
 
-## 12. Mandatory Linux process containment
+## 12. Smithers adapter: process lifecycle
 
 ### 12.1 Support distinction
 
-The bridge crate contains portable code paths, but its artifact contract is only
-x86_64 GNU/Linux with glibc 2.35 or newer, built and smoked on Ubuntu 22.04. A
-conforming Smithers adapter additionally requires an executable Bubblewrap and
-usable private PID namespaces. It MUST reject Linux arm64, macOS x86_64, macOS
-arm64, Windows, an older glibc baseline, and every other unsupported host before
-bridge spawn.
+This crate is a portable JSONL worker. It MUST NOT require Bubblewrap, a
+private PID namespace, `sandbox-exec`, or any other kernel isolation wrapper
+in order to start. A conforming Smithers adapter MUST spawn the matching
+released binary directly, the same way it spawns other CLI agent workers.
 
-macOS is not “supported without Bubblewrap.” It has no Bubblewrap PID namespace
-and protocol v1 defines no equivalent containment primitive. Future macOS
-support requires a separate released target plus clean-host capability,
-cancellation, detached-daemon, pipe/socket/heartbeat, and forced-cleanup tests.
-A process-group-only fallback MUST NOT be advertised as equivalent.
+The current released triples are:
 
-CI runs the complete provider-independent source suite on macOS 15 arm64 to
-preserve portability and detect accidental platform coupling. That source-level
-signal is not a macOS artifact, containment qualification, or support claim.
+| Triple | Oldest supported host |
+| --- | --- |
+| `x86_64-unknown-linux-gnu` | Ubuntu 22.04, glibc 2.35 |
+| `aarch64-apple-darwin` | macOS 15 arm64 |
 
-### 12.2 Exact Bubblewrap launch
+The adapter MUST reject Windows, musl, and any triple not listed in
+`hello.data.target` / the capability schema. Linux arm64 and Intel macOS are
+not shipped in 0.0.2. CI still runs the provider-independent suite on the
+Linux and macOS builders used to produce those artifacts.
 
-Both capability preflight and `serve` MUST fail closed unless an executable
-`bwrap` is found at `/usr/bin/bwrap`, `/bin/bwrap`, or an explicit `PATH`
-candidate. Each payload is launched without a shell using this exact common
-prefix:
+### 12.2 Direct spawn
+
+Both capability preflight and `serve` MUST be launched without a shell:
 
 ```text
-bwrap
-  --unshare-pid
-  --die-with-parent
-  --new-session
-  --bind / /
-  --proc /proc
-  --dev-bind /dev /dev
-  --
-  /absolute/or-PATH-resolved/smithers-nanocodex
-  <mode arguments>
+/absolute/or-PATH-resolved/smithers-nanocodex capabilities --json
+/absolute/or-PATH-resolved/smithers-nanocodex serve --protocol-version 1
 ```
 
-`<mode arguments>` is exactly `capabilities --json` for preflight and exactly
-`serve --protocol-version 1` for the turn process. Preflight MUST validate the
-capability object and contained-process closure before the turn process starts.
-
 The adapter sets the canonical workspace as cwd, uses explicit stdin/stdout/
-stderr pipes, and starts the wrapper as a detached process group. Prompts,
-snapshots, commands, and credentials are absent from argv.
+stderr pipes, and MUST NOT wrap the binary in Bubblewrap or `sandbox-exec`.
+Prompts, snapshots, commands, and credentials are absent from argv.
 
-`--unshare-pid` plus `--die-with-parent` is the authoritative descendant
-membership boundary: when the namespace init exits, detached/reparented members
-cannot remain in that namespace. `--new-session`, process-group signaling, and
-PID/start-time-guarded `/proc` enumeration are supplemental. The adapter MUST:
+Cancel and teardown are process-group best-effort: send a correlated
+`turn.cancel` when start has been written, then SIGTERM, then SIGKILL. This
+is the same lifecycle class as other Smithers CLI agents. A double-forked
+native tool MAY outlive the bridge. The adapter MUST NOT advertise that
+cleanup as PID-namespace-authoritative.
 
-- census descendants during execution and immediately before/after signaling;
-- guard PIDs with Linux start time to avoid PID-reuse kills;
-- send SIGTERM to known descendants and the root process group;
-- after bounded grace, repeat with SIGKILL;
-- re-enumerate to close fork-during-signal races;
-- reject success if root closure or surviving-descendant cleanup cannot be
-  verified;
-- keep an authoritative terminal non-enumerably available to recovery logic if
-  process cleanup later fails.
+### 12.3 Isolation is not this worker
 
-Tests MUST include a rapidly double-forked/new-session daemon and prove no PID,
-heartbeat growth, listening Unix socket, or held pipe survives. A negative
-control that bypasses the PID namespace must prove the fixture would escape.
-
-### 12.3 What Bubblewrap does not isolate
-
-This launch is process containment, not a tool sandbox. `--bind / /` exposes the
-host root read-write. Omitting `--unshare-net` preserves host networking.
-`--dev-bind /dev /dev` exposes host devices according to host permissions.
-
-Therefore protocol v1 makes no claim that Code Mode or stock tools are
-filesystem-, network-, or credential-isolated. In particular:
+Direct spawn is not a filesystem, network, device, or credential sandbox.
+Code Mode and stock tools run with the adapter's environment and the host
+filesystem. In particular:
 
 - managed ChatGPT auth files remain readable by native tools when host
   permissions allow;
 - `HOME`, `CODEX_HOME`, unrelated environment secrets, SSH/cloud credentials,
-  repository secrets, and other mounted host files may be reachable;
+  repository secrets, and other readable host files may be reachable;
 - the API-key mitigation blanks only the exact selected variable in native tool
   subprocesses; it does not erase the bridge parent's original environment, and
   same-UID descendants may be able to inspect that parent through `/proc`;
@@ -877,9 +871,9 @@ filesystem-, network-, or credential-isolated. In particular:
   final text, tool history, or the opaque snapshot.
 
 Event projection and stderr redaction do not sanitize final messages or opaque
-snapshots. Operators needing credential isolation MUST supply a stronger
-external filesystem/environment/network sandbox or a credential broker and
-validate it independently. The current Bubblewrap profile does not provide it.
+snapshots. Operators who need isolation MUST apply it outside this worker,
+typically Smithers `<Sandbox>` (Linux Bubblewrap, macOS `sandbox-exec`,
+Docker, or a provider sandbox), and validate that policy independently.
 
 ## 13. Forward compatibility
 
@@ -907,7 +901,9 @@ semver or silently downgrade.
 
 Provider-independent bridge artifact verification MUST cover:
 
-- schemas/fixtures and capability output;
+- schemas/fixtures and capability output, including `hello.data.target`
+  equal to the compiled rustc triple;
+- 0.0.1 / Nanocodex 0.3.0 / `nanocodex-stock-0.3.0` envelope rejection;
 - fragmented LF/CRLF/EOF framing and all byte boundaries;
 - duplicate keys, unknown fields, parser depth/node/member/array/key/string
   limits, and physical command counting including duplicates;
@@ -930,13 +926,14 @@ claim that Smithers integration has shipped or completed qualification.
 Before a Smithers adapter can claim protocol v1 release support, combined
 integration verification MUST additionally cover:
 
+- reject 0.0.1 / Nanocodex 0.3.0 / `nanocodex-stock-0.3.0` envelopes before spawn;
 - policy fingerprint golden vectors in at least two implementation languages;
 - awaited checkpoint publication, callback failure, cleanup recovery, and
   non-enumerable error recovery;
-- Bubblewrap fail-closed startup and the detached-daemon positive/negative
-  containment tests in section 12;
+- direct spawn of the matching Linux or macOS artifact, with no Bubblewrap or
+  `sandbox-exec` wrapper required;
 - clean-host execution of the released archive through capability preflight,
   fresh generation, cancellation, cleanup, and same-workspace resume.
 
 Live API-key and managed-ChatGPT tests remain explicit opt-in smoke tests. They
-do not replace deterministic protocol, security-boundary, or containment tests.
+do not replace deterministic protocol or security-boundary tests.

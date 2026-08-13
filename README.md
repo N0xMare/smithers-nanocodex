@@ -16,9 +16,8 @@ planner, process pool, session database, or second multi-agent system.
 ```text
 Smithers task
   -> external NanocodexAgent adapter
-  -> Bubblewrap PID containment
   -> smithers-nanocodex serve
-  -> stock Nanocodex 0.3.0 + native tools
+  -> stock Nanocodex 0.5.0 + native tools
   -> events + final message + session snapshot
   -> durable Smithers checkpoint
   -> shutdown and process exit
@@ -41,23 +40,49 @@ vectors.
 
 ## Baseline
 
-- Bridge: `0.0.1`
+- Bridge: `0.0.2`
 - Wire protocol: `smithers.nanocodex/1`
-- Nanocodex: exactly `0.3.0`
+- Nanocodex: exactly `0.5.0`
 - Rust: `1.97`
 - Checkpoints: `nanocodex.session-snapshot/1`, resume only
-- Release target: x86_64 GNU/Linux, glibc 2.35 or newer (Ubuntu 22.04 baseline)
+- Tool profile: `nanocodex-stock-0.5.0`
+- Release targets: `x86_64-unknown-linux-gnu` (glibc 2.35+, Ubuntu 22.04) and
+  `aarch64-apple-darwin` (macOS 15)
+- Model: Nanocodex 0.5.0 stock (`gpt-5.6-sol`)
 
-The immutable consumer pin for the qualified release artifact is
-[`docs/releases/v0.0.1.json`](docs/releases/v0.0.1.json). Future Smithers
-integration work should select the matching target, download that exact archive,
-verify its recorded SHA-256 digest, and then validate the runtime capabilities
-before launching it.
+The current consumer contract is
+[`docs/releases/v0.0.2.json`](docs/releases/v0.0.2.json). It is currently
+`prepared`: digest, size, and tag-commit fields are filled only when that tag
+is published. Until then the GitHub “Latest” release remains historical
+`v0.0.1` and the 0.0.2 archives do not exist. The historical qualified pin
+[`docs/releases/v0.0.1.json`](docs/releases/v0.0.1.json) is immutable and is
+not updated. In that pin, `policyFingerprint` is the algorithm identifier; in
+a checkpoint envelope the same field name is the SHA-256 digest.
 
-A conforming Smithers deployment additionally requires an executable Bubblewrap
-and usable private PID namespaces. Releasing this bridge is an input to the
+A conforming Smithers adapter spawns this binary directly. Bubblewrap is not
+required and must not wrap the worker. Releasing this bridge is an input to the
 separate Smithers adapter work; it does not by itself claim that adapter has
 shipped or completed integration qualification.
+
+## Migrating from 0.0.1
+
+0.0.1 required the Smithers adapter to wrap this binary in a specific
+Bubblewrap PID-containment profile. 0.0.2 removes that launch gate.
+
+- Spawn `smithers-nanocodex serve --protocol-version 1` directly, the same
+  way other Smithers CLI agents are spawned.
+- Do not wrap this worker in `bwrap` or `sandbox-exec`.
+- Isolation, if required, is a separate host policy — typically Smithers
+  `<Sandbox>` around the whole agent process. That outer layer is not this
+  binary and is not a substitute for the direct-spawn argv.
+- 0.0.1 / Nanocodex 0.3.0 / `nanocodex-stock-0.3.0` checkpoints cannot resume
+  on this baseline. Start a new conversation.
+
+Two containment layers:
+
+1. **Worker argv (required):** this binary, no wrapper.
+2. **Optional host isolation:** Smithers `<Sandbox>` (Linux Bubblewrap, macOS
+   `sandbox-exec`, Docker, or a provider sandbox). Independent of this crate.
 
 Protocol v1 keeps stock Code Mode and stock tool families enabled. It does not
 offer MCP, subagents, steering, arbitrary JavaScript tools, custom provider
@@ -70,11 +95,14 @@ append mode.
 ```bash
 cargo build --locked --release
 ./target/release/smithers-nanocodex --version
+./target/release/smithers-nanocodex capabilities
 ./target/release/smithers-nanocodex capabilities --json
 ```
 
-Capability inspection is side-effect free: it performs no authentication,
-network request, workspace mutation, or agent construction.
+`capabilities` without flags prints pretty-printed JSON.
+`capabilities --json` prints the same object as compact JSON. Both are
+side-effect free: they perform no authentication, network request, workspace
+mutation, or agent construction.
 
 Start the JSONL worker with:
 
@@ -97,35 +125,31 @@ Protocol supports two explicit modes:
 - `chatgpt` uses an explicit or standard Nanocodex/Codex auth file. The bridge
   reads it through an enforced 1 MiB streaming cap and gives Nanocodex an
   owner-private staged copy, synchronizing refreshes back with bounded reads
-  and atomic writes.
+  and atomic writes. That staging is not a credential-isolation boundary:
+  native tools can still read the original file when host permissions allow.
 
 The transport is Nanocodex's WebSocket-preferred Responses transport with its
 built-in sticky HTTPS fallback. Custom endpoints are rejected.
 
 ## Security boundary: important
 
-The required conforming Smithers integration launches the bridge with Bubblewrap in a
-private PID namespace. That makes descendant membership and cleanup
-authoritative, including detached native tool processes.
-
-It is not a filesystem, network, or general credential sandbox. The current
-profile binds `/` read-write, preserves host networking, and exposes `/dev` per
-host permissions. Managed ChatGPT auth files, unrelated environment secrets,
-SSH/cloud credentials, and other readable host files can still be reached by
-Code Mode or stock tools. A secret a tool reads can enter provider input, final
-text, or the opaque session snapshot.
+This worker is not a sandbox. The adapter starts it as an ordinary process
+(layer 1). Managed ChatGPT auth files, unrelated environment secrets, SSH/cloud
+credentials, and other readable host files can still be reached by Code Mode
+or stock tools. A secret a tool reads can enter provider input, final text, or
+the opaque session snapshot.
 
 Event filtering and stderr redaction do not sanitize final messages or opaque
 snapshots. Treat checkpoints as secrets. Deployments that require tool
-credential isolation need a stronger external mount/environment/network policy
-or credential broker; this bridge does not claim to provide one.
+credential isolation must apply a stronger policy *outside* this binary —
+typically Smithers `<Sandbox>` (layer 2) — or a credential broker. An outer
+Bubblewrap/`sandbox-exec` sandbox is host policy, not a wrapper of this
+worker's argv. This bridge does not provide filesystem, network, or
+credential isolation.
 
-Bubblewrap is Linux-only. A conforming Smithers adapter must fail closed on
-macOS, Windows, Linux arm64, or a Linux x86_64 host where Bubblewrap/PID
-namespaces are unavailable. A process-group-only macOS fallback is not part of
-protocol support. CI still runs the provider-independent suite on macOS 15 to
-preserve source portability, but v0.0.1 publishes no macOS artifact and makes no
-Smithers-on-macOS support claim.
+Windows, musl, Linux arm64, and Intel macOS are not shipped in 0.0.2. Cancel
+uses process-group best-effort cleanup, the same class as other Smithers CLI
+agents; a double-forked native tool may outlive the bridge.
 
 ## Checkpoints
 
@@ -139,7 +163,7 @@ checkpoint, awaits `onCheckpoint`, then returns the identical checkpoint object.
 The absolute Smithers checkpoint ceiling is 16 MiB. The bridge limits its opaque
 snapshot to 15 MiB, leaving at least 1 MiB for Smithers' envelope. Cross-worktree
 and cross-machine relocation are intentionally unsupported because Nanocodex
-0.3.0 binds snapshots to a canonical absolute workspace.
+0.5.0 binds snapshots to a canonical absolute workspace.
 
 The policy fingerprint algorithm is language-independent and versioned. Golden
 UTF-8 bytes and SHA-256 results are in
@@ -173,19 +197,40 @@ does not contain or publish Smithers' JavaScript integration.
 
 ## Release installation
 
-Releases publish an `x86_64-unknown-linux-gnu` archive and SHA-256 checksum. A
-tag must exactly match the package version; tagging and pushing remain explicit
-maintainer actions. The v0.0.1 archive qualified for the Smithers bridge
-baseline is pinned by tag commit, byte length, and digest in
-[`docs/releases/v0.0.1.json`](docs/releases/v0.0.1.json). A published baseline
-manifest is immutable; a newly qualified release gets a new manifest rather
-than changing an existing pin.
+A `v0.0.2` tag publishes one archive per shipped target, each with a SHA-256
+checksum. The tag must exactly match the package version; tagging and pushing
+remain explicit maintainer actions. After publication, record each archive's
+digest and size in [`docs/releases/v0.0.2.json`](docs/releases/v0.0.2.json)
+and set `status` to `qualified`. Until that happens, **do not treat the
+install snippets below as live URLs** — build from source. A published
+baseline manifest is then immutable; a later release gets a new file rather
+than rewriting this one.
+
+### Linux
 
 ```bash
-sha256sum --check smithers-nanocodex-v0.0.1-x86_64-unknown-linux-gnu.tar.gz.sha256
-tar -xzf smithers-nanocodex-v0.0.1-x86_64-unknown-linux-gnu.tar.gz
+target=x86_64-unknown-linux-gnu
+archive=smithers-nanocodex-v0.0.2-${target}.tar.gz
+sha256sum --check "${archive}.sha256"
+tar -xzf "$archive"
 sudo install -m 0755 \
-  smithers-nanocodex-v0.0.1-x86_64-unknown-linux-gnu/smithers-nanocodex \
+  "smithers-nanocodex-v0.0.2-${target}/smithers-nanocodex" \
+  /usr/local/bin/smithers-nanocodex
+```
+
+### macOS (arm64)
+
+```bash
+target=aarch64-apple-darwin
+archive=smithers-nanocodex-v0.0.2-${target}.tar.gz
+shasum -a 256 -c "${archive}.sha256"
+tar -xzf "$archive"
+# Browser-downloaded GitHub assets are quarantined. This first unsigned cut
+# needs the attribute cleared before Gatekeeper will execute it:
+xattr -d com.apple.quarantine \
+  "smithers-nanocodex-v0.0.2-${target}/smithers-nanocodex" || true
+sudo install -m 0755 \
+  "smithers-nanocodex-v0.0.2-${target}/smithers-nanocodex" \
   /usr/local/bin/smithers-nanocodex
 ```
 
@@ -194,4 +239,6 @@ path.
 
 ## License
 
-Licensed under the [MIT License](LICENSE).
+Licensed under the [MIT License](LICENSE). Third-party crate notices for the
+shipped binaries are in
+[third-party/THIRD-PARTY-LICENSES.html](third-party/THIRD-PARTY-LICENSES.html).

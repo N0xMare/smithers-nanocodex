@@ -1,8 +1,8 @@
 # Third-party software notices
 
 `THIRD-PARTY-LICENSES.html` lists the production dependencies included in the
-Linux x86_64 binary and their license texts. It is generated from the locked
-dependency graph with cargo-about 0.9.1:
+shipped Linux and macOS binaries and their license texts. It is generated from
+the locked dependency graph with cargo-about 0.9.1:
 
 ```sh
 cargo about generate --locked --all-features --fail \

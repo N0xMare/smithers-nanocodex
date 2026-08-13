@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://n0xmare.github.io/smithers-nanocodex/schema/server-v1.schema.json",
+  "$comment": "The $id is a stable protocol-v1 identity URI and is not required to resolve. 0.0.2 still uses this v1 identity.",
   "title": "Smithers Nanocodex protocol v1 server record",
   "oneOf": [
     { "$ref": "#/$defs/hello" },

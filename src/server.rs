@@ -157,7 +157,13 @@ where
     if output_tx
         .send_control(Outbound::new(
             "hello",
-            serde_json::to_value(Capabilities::current()).unwrap_or(Value::Null),
+            match serde_json::to_value(Capabilities::current()) {
+                Ok(value) => value,
+                Err(_) => {
+                    let _ = finish_writer(output_tx, writer_task).await;
+                    return ServeExit::InternalOrCleanup;
+                }
+            },
         ))
         .await
         .is_err()
@@ -942,16 +948,18 @@ async fn emit_terminal(
     cancellation_cause: Option<&str>,
 ) -> ServeExit {
     // Once an initiating cancellation has been accepted, a secondary cleanup
-    // failure cannot overwrite its public classification.
+    // failure cannot overwrite its public classification. A completed snapshot
+    // is the spec §6 recovery exception and must still be published.
     if let (
         Some(reason),
         BackendOutcome::Failed {
             error,
             session_id: _,
-            completed: _,
+            completed,
         },
     ) = (cancellation_cause, &outcome)
         && error.category == ErrorCategory::Cleanup
+        && completed.is_none()
     {
         return emit_cancelled_terminal(output, start, accepted_session, reason).await;
     }
@@ -1369,6 +1377,7 @@ mod tests {
         Complete,
         FailBeforeAcceptanceWithSession,
         SecondaryCleanupAfterCancellation,
+        CleanupFailedAfterCompleted,
         WaitForCancellation,
         WaitBeforeAcceptance,
     }
@@ -1777,6 +1786,26 @@ mod tests {
                         completed: None,
                     }
                 }
+                FakeBehavior::CleanupFailedAfterCompleted => {
+                    cancellation.cancelled().await;
+                    BackendOutcome::Failed {
+                        session_id: Some(session_id.clone()),
+                        error: PublicError::new(
+                            "cleanup_failed",
+                            ErrorCategory::Cleanup,
+                            "Agent cleanup did not finish cleanly.",
+                            crate::error::RetryDisposition::Safe,
+                        ),
+                        completed: Some(CompletedTurn {
+                            session_id,
+                            final_message: "done".to_owned(),
+                            usage: json!({"inputTokens": 2, "outputTokens": 1}),
+                            snapshot_version: 1,
+                            snapshot: json!({"version": 1}),
+                            canonical_workspace: request.workspace.display().to_string(),
+                        }),
+                    }
+                }
                 FakeBehavior::FailBeforeAcceptanceWithSession => unreachable!(),
                 FakeBehavior::WaitBeforeAcceptance => unreachable!(),
             }
@@ -1839,6 +1868,47 @@ mod tests {
         let mut reader = RecordReader::new(read);
         assert_eq!(reader.read_record().await.unwrap().unwrap(), br#"{"a":1}"#);
         task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn bounded_reader_accepts_crlf_and_eof_without_lf() {
+        let mut reader = RecordReader::new(&b"{\"a\":1}\r\n\r\n{\"b\":2}"[..]);
+        assert_eq!(reader.read_record().await.unwrap().unwrap(), br#"{"a":1}"#);
+        assert_eq!(reader.read_record().await.unwrap().unwrap(), br#"{"b":2}"#);
+        assert!(reader.read_record().await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn bounded_reader_leaves_a_cr_at_eof_in_the_record() {
+        let mut reader = RecordReader::new(&b"{\"a\":1}\r"[..]);
+        assert_eq!(reader.read_record().await.unwrap().unwrap(), b"{\"a\":1}\r");
+    }
+
+    #[tokio::test]
+    async fn bounded_reader_counts_a_preceding_cr_toward_the_input_limit() {
+        let mut accepted = vec![b'x'; MAX_INPUT_RECORD_BYTES];
+        accepted.push(b'\n');
+        let mut reader = RecordReader::new(accepted.as_slice());
+        assert_eq!(
+            reader.read_record().await.unwrap().unwrap().len(),
+            MAX_INPUT_RECORD_BYTES
+        );
+
+        let mut rejected = vec![b'x'; MAX_INPUT_RECORD_BYTES];
+        rejected.push(b'\r');
+        rejected.push(b'\n');
+        let mut reader = RecordReader::new(rejected.as_slice());
+        let error = reader.read_record().await.unwrap_err();
+        assert_eq!(error.code, "input_record_too_large");
+    }
+
+    #[tokio::test]
+    async fn bounded_reader_rejects_records_over_the_input_limit() {
+        let mut oversized = vec![b'x'; MAX_INPUT_RECORD_BYTES + 1];
+        oversized.push(b'\n');
+        let mut reader = RecordReader::new(oversized.as_slice());
+        let error = reader.read_record().await.unwrap_err();
+        assert_eq!(error.code, "input_record_too_large");
     }
 
     #[tokio::test]
@@ -2504,6 +2574,35 @@ mod tests {
         assert_eq!(terminal["type"], "turn.cancelled");
         assert_eq!(terminal["data"]["reason"], "timeout");
         assert_eq!(server.await.unwrap(), ServeExit::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn completed_cleanup_failure_is_not_reclassified_by_a_late_cancellation() {
+        let workspace = tempfile::tempdir().unwrap();
+        let (mut client_input, server_input) = tokio::io::duplex(8192);
+        let (server_output, client_output) = tokio::io::duplex(64 * 1024);
+        let server = tokio::spawn(serve_with_backend(
+            server_input,
+            server_output,
+            Arc::new(FakeBackend {
+                behavior: FakeBehavior::CleanupFailedAfterCompleted,
+            }),
+            CancellationToken::new(),
+        ));
+        let mut output = BufReader::new(client_output);
+        assert_eq!(read_json_line(&mut output).await["type"], "hello");
+        client_input
+            .write_all(start_record(workspace.path()).as_bytes())
+            .await
+            .unwrap();
+        assert_eq!(read_json_line(&mut output).await["type"], "turn.accepted");
+        drop(client_input);
+        let terminal = read_json_line(&mut output).await;
+        assert_eq!(terminal["type"], "turn.failed");
+        assert_eq!(terminal["data"]["error"]["code"], "cleanup_failed");
+        assert_eq!(terminal["data"]["completed"]["snapshotVersion"], 1);
+        assert!(terminal["data"]["completed"]["snapshot"].is_object());
+        assert_eq!(server.await.unwrap(), ServeExit::InternalOrCleanup);
     }
 
     #[tokio::test]

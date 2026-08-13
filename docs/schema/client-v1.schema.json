@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://n0xmare.github.io/smithers-nanocodex/schema/client-v1.schema.json",
   "title": "Smithers Nanocodex protocol v1 client record",
-  "$comment": "Byte and structural limits that JSON Schema cannot express are normative in docs/spec.md.",
+  "$comment": "The $id is a stable protocol-v1 identity URI and is not required to resolve. Byte and structural limits that JSON Schema cannot express are normative in docs/spec.md.",
   "oneOf": [
     { "$ref": "#/$defs/turnStart" },
     { "$ref": "#/$defs/turnCancel" }

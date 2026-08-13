@@ -4,7 +4,11 @@ use std::{
     fs::OpenOptions,
     io::{ErrorKind, Read, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
 };
 
 use async_trait::async_trait;
@@ -48,6 +52,7 @@ use crate::{
 };
 
 const EVENT_WIRE_ENVELOPE_RESERVE: usize = 1024;
+const EXACT_CANCELLATION_TIMEOUT: Duration = Duration::from_secs(1);
 const MAX_MANAGED_AUTH_SYNC_ATTEMPTS: usize = 3;
 
 #[async_trait]
@@ -71,12 +76,18 @@ pub enum BackendNotice {
     },
 }
 
-struct NanocodexTurnCancellation(TurnControl);
+struct NanocodexTurnCancellation {
+    control: TurnControl,
+    issued: Arc<AtomicBool>,
+}
 
 #[async_trait]
 impl AcceptedTurnCancellation for NanocodexTurnCancellation {
     async fn cancel(&self) -> Result<(), PublicError> {
-        self.0.cancel().await.map_err(|error| match error {
+        if self.issued.swap(true, Ordering::SeqCst) {
+            return Ok(());
+        }
+        self.control.cancel().await.map_err(|error| match error {
             NanocodexError::TurnNotCancellable => PublicError::protocol(
                 "turn_not_cancellable",
                 "The turn has already entered finalization.",
@@ -236,16 +247,9 @@ where
     let session_id = agent.session_id().to_string();
 
     if cancellation.is_cancelled() {
-        let shutdown = agent.shutdown().await;
-        return match shutdown {
-            Ok(()) => BackendOutcome::Cancelled {
-                session_id: Some(session_id),
-            },
-            Err(error) => BackendOutcome::Failed {
-                session_id: Some(session_id),
-                error: cleanup_error(&error),
-                completed: None,
-            },
+        let _ = agent.shutdown().await;
+        return BackendOutcome::Cancelled {
+            session_id: Some(session_id),
         };
     }
 
@@ -255,41 +259,36 @@ where
         result = &mut prompt => match result {
             Ok(turn) => turn,
             Err(error) => {
-                let shutdown = agent.shutdown().await;
-                let public = shutdown.as_ref().err().map_or_else(
-                    || map_nanocodex_error(&error),
-                    cleanup_error,
-                );
+                let _ = agent.shutdown().await;
                 return BackendOutcome::Failed {
                     session_id: Some(session_id),
-                    error: public,
+                    error: map_nanocodex_error(&error),
                     completed: None,
                 };
             }
         },
         () = cancellation.cancelled() => {
-            let shutdown = agent.shutdown().await;
-            return match shutdown {
-                Ok(()) => BackendOutcome::Cancelled { session_id: Some(session_id) },
-                Err(error) => BackendOutcome::Failed {
-                    session_id: Some(session_id),
-                    error: cleanup_error(&error),
-                    completed: None,
-                },
-            };
+            let _ = agent.shutdown().await;
+            return BackendOutcome::Cancelled { session_id: Some(session_id) };
         }
     };
 
     let control = turn.control();
+    let exact_cancel_issued = Arc::new(AtomicBool::new(false));
     if notices
         .send(BackendNotice::Accepted {
             session_id: session_id.clone(),
-            cancellation: Arc::new(NanocodexTurnCancellation(control.clone())),
+            cancellation: Arc::new(NanocodexTurnCancellation {
+                control: control.clone(),
+                issued: Arc::clone(&exact_cancel_issued),
+            }),
         })
         .await
         .is_err()
     {
-        let _ = control.cancel().await;
+        if !exact_cancel_issued.swap(true, Ordering::SeqCst) {
+            let _ = tokio::time::timeout(EXACT_CANCELLATION_TIMEOUT, control.cancel()).await;
+        }
         let _ = agent.shutdown().await;
         return BackendOutcome::Cancelled {
             session_id: Some(session_id),
@@ -321,8 +320,10 @@ where
                 }
             }
             () = cancellation.cancelled(), if cancel_task.is_none() => {
-                let control = control.clone();
-                cancel_task = Some(tokio::spawn(async move { control.cancel().await }));
+                if !exact_cancel_issued.swap(true, Ordering::SeqCst) {
+                    let control = control.clone();
+                    cancel_task = Some(tokio::spawn(async move { control.cancel().await }));
+                }
             }
         }
     }
@@ -332,13 +333,14 @@ where
         event_error = Some(error);
     }
     let cancellation_task_error = if let Some(task) = cancel_task {
-        match task.await {
-            Ok(Ok(())) | Ok(Err(NanocodexError::TurnNotCancellable)) => None,
-            Ok(Err(error)) => Some(map_nanocodex_error(&error)),
-            Err(_) => Some(PublicError::internal(
+        match tokio::time::timeout(EXACT_CANCELLATION_TIMEOUT, task).await {
+            Ok(Ok(Ok(()))) | Ok(Ok(Err(NanocodexError::TurnNotCancellable))) => None,
+            Ok(Ok(Err(error))) => Some(map_nanocodex_error(&error)),
+            Ok(Err(_)) => Some(PublicError::internal(
                 "cancellation_task_failed",
                 "The turn cancellation task stopped unexpectedly.",
             )),
+            Err(_) => None,
         }
     } else {
         None
@@ -357,24 +359,20 @@ where
     let result = match result {
         Ok(result) => result,
         Err(error) => {
-            let shutdown = agent.shutdown().await;
-            let public = shutdown
-                .as_ref()
-                .err()
-                .map_or_else(|| map_nanocodex_error(&error), cleanup_error);
+            let _ = agent.shutdown().await;
             return BackendOutcome::Failed {
                 session_id: Some(session_id),
-                error: public,
+                error: map_nanocodex_error(&error),
                 completed: None,
             };
         }
     };
 
     if let Some(error) = cancellation_task_error.or(event_error) {
-        let shutdown = agent.shutdown().await;
+        let _ = agent.shutdown().await;
         return BackendOutcome::Failed {
             session_id: Some(session_id),
-            error: shutdown.as_ref().err().map_or(error, cleanup_error),
+            error,
             completed: None,
         };
     }
@@ -571,6 +569,12 @@ fn validate_request(request: TurnStartData) -> Result<ValidatedRequest, PublicEr
             "The workspace is not a directory.",
         ));
     }
+    if canonical_workspace.to_str().is_none() {
+        return Err(workspace_error(
+            "workspace_not_utf8",
+            "The canonical workspace is not valid UTF-8.",
+        ));
+    }
     if request
         .options
         .instructions
@@ -617,7 +621,7 @@ fn validate_request(request: TurnStartData) -> Result<ValidatedRequest, PublicEr
                 return Err(PublicError::new(
                     "invalid_snapshot",
                     ErrorCategory::Checkpoint,
-                    "Only exact snapshots produced by this bridge version can be resumed.",
+                    "Only a canonical Nanocodex session snapshot can be resumed.",
                     RetryDisposition::Never,
                 ));
             }
@@ -1210,22 +1214,33 @@ impl EventForwarder {
                 EVENT_WIRE_ENVELOPE_RESERVE,
             )
         } else {
-            let value = safe_event_projection(event)?;
-            let size = serde_json::to_vec(&value)
-                .map_err(|_| event_serialization_error())?
-                .len()
-                .saturating_add(EVENT_WIRE_ENVELOPE_RESERVE);
-            if size > MAX_EVENT_BYTES {
-                (
+            match safe_event_projection(event) {
+                Ok(value) => {
+                    let size = serde_json::to_vec(&value)
+                        .map_err(|_| event_serialization_error())?
+                        .len()
+                        .saturating_add(EVENT_WIRE_ENVELOPE_RESERVE);
+                    if size > MAX_EVENT_BYTES {
+                        (
+                            BackendNotice::EventTruncated {
+                                upstream_type: upstream_type.clone(),
+                                upstream_seq,
+                                reason: "event_limit",
+                            },
+                            EVENT_WIRE_ENVELOPE_RESERVE,
+                        )
+                    } else {
+                        (BackendNotice::Event { event: value }, size)
+                    }
+                }
+                Err(_) => (
                     BackendNotice::EventTruncated {
                         upstream_type: upstream_type.clone(),
                         upstream_seq,
-                        reason: "event_limit",
+                        reason: "event_policy",
                     },
                     EVENT_WIRE_ENVELOPE_RESERVE,
-                )
-            } else {
-                (BackendNotice::Event { event: value }, size)
+                ),
             }
         };
         let notice = if self
@@ -1270,36 +1285,47 @@ impl EventForwarder {
     }
 }
 
+fn projects_typed_payload(kind: AgentEventKind) -> bool {
+    matches!(
+        kind,
+        AgentEventKind::AssistantDelta
+            | AgentEventKind::AssistantMessage
+            | AgentEventKind::ToolCall
+            | AgentEventKind::ToolResult
+    )
+}
+
 fn safe_event_projection(event: &AgentEvent) -> Result<Value, PublicError> {
-    let payload = match event.data().map_err(|_| event_serialization_error())? {
-        AgentEventData::Assistant(AssistantEvent::Delta(delta)) => json!({
-            "modelCallIndex": delta.model_call_index,
-            "itemId": delta.item_id,
-            "phase": delta.phase,
-            "text": delta.text,
-        }),
-        AgentEventData::Assistant(AssistantEvent::Message(message)) => json!({
-            "modelCallIndex": message.model_call_index,
-            "itemId": message.item_id,
-            "phase": message.phase,
-            "text": message.text,
-        }),
-        AgentEventData::Tool(ToolEvent::Call(call)) => json!({
-            "callId": call.call_id,
-            "tool": call.tool,
-            "modelCallIndex": call.model_call_index,
-        }),
-        AgentEventData::Tool(ToolEvent::Result(result)) => json!({
-            "callId": result.call_id,
-            "tool": result.tool,
-            "status": tool_status_name(result.status),
-            "durationNs": result.duration_ns,
-            "startedAfterNs": result.started_after_ns,
-        }),
-        // Lifecycle/model/transport payloads can contain provider diagnostics,
-        // request configuration, workspace paths, or raw error strings. Their
-        // stable kind is sufficient for workflow-facing progress projection.
-        _ => json!({}),
+    let payload = if projects_typed_payload(event.kind) {
+        match event.data().map_err(|_| event_serialization_error())? {
+            AgentEventData::Assistant(AssistantEvent::Delta(delta)) => json!({
+                "modelCallIndex": delta.model_call_index,
+                "itemId": delta.item_id,
+                "phase": delta.phase,
+                "text": delta.text,
+            }),
+            AgentEventData::Assistant(AssistantEvent::Message(message)) => json!({
+                "modelCallIndex": message.model_call_index,
+                "itemId": message.item_id,
+                "phase": message.phase,
+                "text": message.text,
+            }),
+            AgentEventData::Tool(ToolEvent::Call(call)) => json!({
+                "callId": call.call_id,
+                "tool": call.tool,
+                "modelCallIndex": call.model_call_index,
+            }),
+            AgentEventData::Tool(ToolEvent::Result(result)) => json!({
+                "callId": result.call_id,
+                "tool": result.tool,
+                "status": tool_status_name(result.status),
+                "durationNs": result.duration_ns,
+                "startedAfterNs": result.started_after_ns,
+            }),
+            _ => json!({}),
+        }
+    } else {
+        json!({})
     };
     Ok(json!({
         "type": event_kind_name(event.kind)?,
@@ -1445,10 +1471,7 @@ fn map_nanocodex_error(error: &NanocodexError) -> PublicError {
             provider,
             ResponsesError::Authorization { .. }
                 | ResponsesError::InvalidAuthorization { .. }
-                | ResponsesError::HandshakeRejected {
-                    status: 401 | 403,
-                    ..
-                }
+                | ResponsesError::HandshakeRejected { status: 401, .. }
                 | ResponsesError::HttpRejected {
                     status: 401 | 403,
                     ..
@@ -1471,8 +1494,13 @@ fn map_nanocodex_error(error: &NanocodexError) -> PublicError {
         if let Some(advice) = provider.retry_advice()
             && let Some(delay) = advice.server_delay
         {
-            public.retry = RetryDisposition::After;
-            public.retry_after_ms = u64::try_from(delay.as_millis()).ok();
+            match u64::try_from(delay.as_millis()) {
+                Ok(milliseconds) => {
+                    public.retry = RetryDisposition::After;
+                    public.retry_after_ms = Some(milliseconds);
+                }
+                Err(_) => public.retry = RetryDisposition::Safe,
+            }
         }
         return public;
     }
@@ -1545,7 +1573,57 @@ fn map_nanocodex_error(error: &NanocodexError) -> PublicError {
             "The turn was cancelled.",
             RetryDisposition::Safe,
         ),
-        _ => PublicError::internal("nanocodex_failed", "The Nanocodex agent failed."),
+        NanocodexError::AgentStopped => PublicError::internal(
+            "agent_stopped",
+            "The Nanocodex agent stopped before accepting the turn.",
+        ),
+        NanocodexError::TurnStopped => PublicError::internal(
+            "turn_stopped",
+            "The Nanocodex agent stopped before the turn completed.",
+        ),
+        NanocodexError::Event(_) => PublicError::internal(
+            "event_protocol_failed",
+            "The Nanocodex event stream violated its contract.",
+        ),
+        NanocodexError::MalformedResponse { .. } | NanocodexError::InvalidAttemptState { .. } => {
+            PublicError::new(
+                "provider_protocol_failed",
+                ErrorCategory::Provider,
+                "The model provider response violated the upstream response protocol.",
+                RetryDisposition::Never,
+            )
+        }
+        NanocodexError::SerializePromptPrefix(_) => PublicError::new(
+            "invalid_agent_configuration",
+            ErrorCategory::Config,
+            "The requested agent policy is invalid or incompatible.",
+            RetryDisposition::Never,
+        ),
+        NanocodexError::TurnNotCancellable => PublicError::protocol(
+            "turn_not_cancellable",
+            "The turn has already entered finalization.",
+        ),
+        NanocodexError::TurnNotSteerable | NanocodexError::SteerQueueFull => PublicError::new(
+            "steering_unsupported",
+            ErrorCategory::Config,
+            "The requested agent policy is invalid or incompatible.",
+            RetryDisposition::Never,
+        ),
+        NanocodexError::TokioRuntimeUnavailable => PublicError::new(
+            "invalid_agent_configuration",
+            ErrorCategory::Config,
+            "The requested agent policy is invalid or incompatible.",
+            RetryDisposition::Never,
+        ),
+        NanocodexError::InitializeRollout { .. } | NanocodexError::PersistRollout { .. } => {
+            PublicError::new(
+                "nanocodex_failed",
+                ErrorCategory::Internal,
+                "The Nanocodex agent failed.",
+                RetryDisposition::Never,
+            )
+        }
+        NanocodexError::Shutdown(_) => cleanup_error(error),
     }
 }
 
@@ -1570,6 +1648,7 @@ fn workspace_error(code: &'static str, message: &'static str) -> PublicError {
 #[cfg(test)]
 mod tests {
     use std::{
+        io::ErrorKind,
         path::{Path, PathBuf},
         process::{Command, Stdio},
         sync::{
@@ -1581,6 +1660,7 @@ mod tests {
 
     use nanocodex::oai::{
         ResponseError,
+        events::EventError,
         responses::{ContentItem, MessageRole, ResponseItem, WarmupResponse},
         tower::{
             CodeCall, CodeCallKind, GenerationOutput, ResponsePipelineStats, ResponsesAttemptKind,
@@ -2343,6 +2423,30 @@ text(result.output);"#,
         assert_eq!(provider.retry_after_ms, Some(1250));
         assert!(!provider.message.contains("provider-secret-body"));
 
+        let handshake_403 =
+            NanocodexError::Response(ResponseError::from(ResponsesError::HandshakeRejected {
+                status: 403,
+                body: "chatgpt-edge-secret".to_owned(),
+                retry_after: Some(Duration::from_secs(2)),
+            }));
+        let handshake_403 = map_nanocodex_error(&handshake_403);
+        assert_eq!(handshake_403.code, "provider_handshake_rejected");
+        assert_eq!(handshake_403.category, ErrorCategory::Provider);
+        assert_eq!(handshake_403.retry, RetryDisposition::Safe);
+        assert_eq!(handshake_403.retry_after_ms, None);
+        assert!(!handshake_403.message.contains("chatgpt-edge-secret"));
+
+        let overflow =
+            NanocodexError::Response(ResponseError::from(ResponsesError::HandshakeRejected {
+                status: 429,
+                body: "retry-secret".to_owned(),
+                retry_after: Some(Duration::MAX),
+            }));
+        let overflow = map_nanocodex_error(&overflow);
+        assert_eq!(overflow.retry, RetryDisposition::Safe);
+        assert_eq!(overflow.retry_after_ms, None);
+        assert!(!overflow.message.contains("retry-secret"));
+
         for rejected in [
             ResponsesError::HandshakeRejected {
                 status: 401,
@@ -2377,6 +2481,246 @@ text(result.output);"#,
         let lineage = map_nanocodex_error(&NanocodexError::CheckpointLineageMismatch);
         assert_eq!(lineage.code, "checkpoint_lineage_mismatch");
         assert_eq!(lineage.category, ErrorCategory::Checkpoint);
+    }
+
+    #[test]
+    fn nanocodex_error_map_is_exhaustive_for_pinned_variants() {
+        let serde_error = serde_json::from_str::<Value>("").unwrap_err();
+        let cases: Vec<(NanocodexError, &str, ErrorCategory, RetryDisposition)> = vec![
+            (
+                NanocodexError::InvalidRequest("policy".into()),
+                "invalid_agent_configuration",
+                ErrorCategory::Config,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::ResolveWorkspace {
+                    path: PathBuf::from("/missing"),
+                    source: std::io::Error::from(ErrorKind::NotFound),
+                },
+                "workspace_invalid",
+                ErrorCategory::Workspace,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::WorkspaceNotDirectory {
+                    path: PathBuf::from("/tmp"),
+                },
+                "workspace_invalid",
+                ErrorCategory::Workspace,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::WorkspaceNotUtf8 {
+                    path: PathBuf::from("/tmp"),
+                },
+                "workspace_invalid",
+                ErrorCategory::Workspace,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::WorkspaceChanged {
+                    current: "/a".into(),
+                    requested: "/b".into(),
+                },
+                "workspace_changed",
+                ErrorCategory::Workspace,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::MalformedResponse { detail: "shape" },
+                "provider_protocol_failed",
+                ErrorCategory::Provider,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::InvalidAttemptState { detail: "state" },
+                "provider_protocol_failed",
+                ErrorCategory::Provider,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::SerializePromptPrefix(serde_error),
+                "invalid_agent_configuration",
+                ErrorCategory::Config,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::AgentStopped,
+                "agent_stopped",
+                ErrorCategory::Internal,
+                RetryDisposition::Safe,
+            ),
+            (
+                NanocodexError::TurnStopped,
+                "turn_stopped",
+                ErrorCategory::Internal,
+                RetryDisposition::Safe,
+            ),
+            (
+                NanocodexError::Shutdown(Arc::new(NanocodexError::TurnStopped)),
+                "cleanup_failed",
+                ErrorCategory::Cleanup,
+                RetryDisposition::Safe,
+            ),
+            (
+                NanocodexError::TurnNotSteerable,
+                "steering_unsupported",
+                ErrorCategory::Config,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::SteerQueueFull,
+                "steering_unsupported",
+                ErrorCategory::Config,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::TurnNotCancellable,
+                "turn_not_cancellable",
+                ErrorCategory::Protocol,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::TurnCancelled,
+                "turn_cancelled",
+                ErrorCategory::Internal,
+                RetryDisposition::Safe,
+            ),
+            (
+                NanocodexError::ForkBeforeCompletedTurn,
+                "checkpoint_unavailable",
+                ErrorCategory::Checkpoint,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::InvalidSessionSnapshot("bad".into()),
+                "invalid_snapshot",
+                ErrorCategory::Checkpoint,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::TokioRuntimeUnavailable,
+                "invalid_agent_configuration",
+                ErrorCategory::Config,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::InitializeRollout {
+                    codex_home: PathBuf::from("/tmp"),
+                    source: std::io::Error::from(ErrorKind::PermissionDenied),
+                },
+                "nanocodex_failed",
+                ErrorCategory::Internal,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::PersistRollout {
+                    path: PathBuf::from("/tmp/rollout"),
+                    source: std::io::Error::from(ErrorKind::PermissionDenied),
+                },
+                "nanocodex_failed",
+                ErrorCategory::Internal,
+                RetryDisposition::Never,
+            ),
+            (
+                NanocodexError::Event(EventError::ClosedBeforeTerminal),
+                "event_protocol_failed",
+                ErrorCategory::Internal,
+                RetryDisposition::Safe,
+            ),
+            (
+                NanocodexError::Tools(nanocodex::tools::ToolsBuildError::EmptyName),
+                "invalid_tool_configuration",
+                ErrorCategory::Tool,
+                RetryDisposition::Never,
+            ),
+        ];
+        for (error, code, category, retry) in cases {
+            let public = map_nanocodex_error(&error);
+            assert_eq!(public.code, code, "{error:?}");
+            assert_eq!(public.category, category, "{error:?}");
+            assert_eq!(public.retry, retry, "{error:?}");
+        }
+    }
+
+    fn turn_start_at(workspace: PathBuf) -> TurnStartData {
+        TurnStartData {
+            prompt: "hello".to_owned(),
+            workspace,
+            auth: AuthConfig::ApiKeyEnv {
+                environment_variable: "UNUSED_TEST_KEY".to_owned(),
+            },
+            transport: crate::protocol::TransportConfig::Websocket,
+            options: crate::protocol::TurnOptions::default(),
+            continuation: None,
+        }
+    }
+
+    #[test]
+    fn validate_request_rejects_relative_missing_and_non_directory_workspaces() {
+        let relative = validate_request(turn_start_at(PathBuf::from("relative")))
+            .err()
+            .expect("relative workspace must be rejected");
+        assert_eq!(relative.code, "workspace_not_absolute");
+        assert_eq!(relative.category, ErrorCategory::Workspace);
+
+        let missing = validate_request(turn_start_at(
+            std::env::temp_dir().join("smithers-nanocodex-missing-workspace"),
+        ))
+        .err()
+        .expect("missing workspace must be rejected");
+        assert_eq!(missing.code, "workspace_unavailable");
+
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let not_dir = validate_request(turn_start_at(file.path().canonicalize().unwrap()))
+            .err()
+            .expect("non-directory workspace must be rejected");
+        assert_eq!(not_dir.code, "workspace_not_directory");
+    }
+
+    #[test]
+    fn validate_request_rejects_empty_and_oversized_prompts_and_instructions() {
+        let mut empty = turn_start_at(PathBuf::from("/unused"));
+        empty.prompt.clear();
+        assert_eq!(
+            validate_request(empty)
+                .err()
+                .expect("empty prompt must be rejected")
+                .code,
+            "invalid_prompt"
+        );
+
+        let mut oversized = turn_start_at(PathBuf::from("/unused"));
+        oversized.prompt = "x".repeat(MAX_PROMPT_BYTES + 1);
+        assert_eq!(
+            validate_request(oversized)
+                .err()
+                .expect("oversized prompt must be rejected")
+                .code,
+            "invalid_prompt"
+        );
+
+        let workspace = tempfile::tempdir().unwrap();
+        let mut empty_instructions = turn_start_at(workspace.path().to_path_buf());
+        empty_instructions.options.instructions = Some("   ".to_owned());
+        assert_eq!(
+            validate_request(empty_instructions)
+                .err()
+                .expect("empty instructions must be rejected")
+                .code,
+            "invalid_instructions"
+        );
+
+        let mut oversized_instructions = turn_start_at(workspace.path().to_path_buf());
+        oversized_instructions.options.instructions = Some("x".repeat(MAX_PROMPT_BYTES + 1));
+        assert_eq!(
+            validate_request(oversized_instructions)
+                .err()
+                .expect("oversized instructions must be rejected")
+                .code,
+            "invalid_instructions"
+        );
     }
 
     #[tokio::test]
@@ -2478,6 +2822,49 @@ text(result.output);"#,
         assert_eq!(event["upstreamSeq"], 8);
         assert_eq!(event["payload"]["callId"], "call-1");
         assert!(event["payload"].get("arguments").is_none());
+    }
+
+    #[tokio::test]
+    async fn aggregate_event_budget_emits_one_truncation_and_then_drops() {
+        let event: AgentEvent = serde_json::from_value(json!({
+            "protocol_version": 1,
+            "request_id": "upstream-request",
+            "seq": 1,
+            "type": "api.event",
+            "payload": {"direction": "outbound"}
+        }))
+        .unwrap();
+        let (notice_tx, mut notice_rx) = mpsc::channel(8);
+        let mut forwarder = EventForwarder::new(notice_tx);
+        let mut aggregate_markers = 0usize;
+        for _ in 0..(MAX_EVENT_TOTAL_BYTES / EVENT_WIRE_ENVELOPE_RESERVE + 4) {
+            forwarder.forward(&event).unwrap();
+            while let Ok(notice) = notice_rx.try_recv() {
+                match notice {
+                    BackendNotice::EventTruncated {
+                        reason: "aggregate_event_limit",
+                        ..
+                    } => aggregate_markers += 1,
+                    BackendNotice::EventTruncated {
+                        reason: "event_policy",
+                        ..
+                    } => {}
+                    BackendNotice::EventTruncated { reason, .. } => {
+                        panic!("unexpected truncation {reason}")
+                    }
+                    BackendNotice::Event { .. } | BackendNotice::Accepted { .. } => {
+                        panic!("unexpected event or acceptance notice")
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            aggregate_markers, 1,
+            "aggregate_event_limit must be reported exactly once"
+        );
+        forwarder.forward(&event).unwrap();
+        forwarder.finish().await.unwrap();
+        assert!(notice_rx.try_recv().is_err());
     }
 
     #[tokio::test]
@@ -2669,6 +3056,24 @@ text(result.output);"#,
         .err()
         .expect("legacy prefix-less snapshot must be rejected");
         assert_eq!(rejected.code, "invalid_snapshot");
+
+        let other = tempfile::tempdir().unwrap();
+        let mismatched = validate_request(TurnStartData {
+            prompt: "resume".to_owned(),
+            workspace: other.path().canonicalize().unwrap(),
+            auth: AuthConfig::ApiKeyEnv {
+                environment_variable: "UNUSED_TEST_KEY".to_owned(),
+            },
+            transport: crate::protocol::TransportConfig::Websocket,
+            options: crate::protocol::TurnOptions::default(),
+            continuation: Some(Continuation::Resume {
+                snapshot: completed.snapshot.clone(),
+            }),
+        })
+        .err()
+        .expect("workspace-mismatched snapshot must be rejected");
+        assert_eq!(mismatched.code, "workspace_changed");
+        assert_eq!(mismatched.category, ErrorCategory::Workspace);
 
         let snapshot: SessionSnapshot = serde_json::from_value(completed.snapshot).unwrap();
         let (notice_tx, _notice_rx) = mpsc::channel(256);

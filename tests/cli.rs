@@ -22,13 +22,52 @@ fn capabilities_command_is_machine_readable_and_side_effect_free() {
     let value: Value = serde_json::from_slice(&output.stdout).expect("capabilities were not JSON");
     assert_eq!(value["protocol"]["name"], "smithers.nanocodex");
     assert_eq!(value["protocol"]["versions"], serde_json::json!([1]));
-    assert_eq!(value["nanocodexVersion"], "0.3.0");
+    assert_eq!(value["bridgeVersion"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(value["nanocodexVersion"], "0.5.0");
+    assert_eq!(value["target"], env!("SMITHERS_NANOCODEX_TARGET"));
+    assert!(
+        ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"]
+            .contains(&value["target"].as_str().expect("capabilities target"))
+    );
     assert_eq!(
         value["checkpoint"]["continuationModes"],
         serde_json::json!(["resume"])
     );
     assert_eq!(value["features"]["customEndpoints"], false);
     assert_eq!(value["features"]["subagents"], false);
+}
+
+#[test]
+fn capabilities_without_json_is_pretty_printed() {
+    let compact = binary()
+        .args(["capabilities", "--json"])
+        .output()
+        .expect("compact capabilities failed to start");
+    let pretty = binary()
+        .args(["capabilities"])
+        .output()
+        .expect("pretty capabilities failed to start");
+    assert!(compact.status.success());
+    assert!(pretty.status.success());
+    assert_ne!(compact.stdout, pretty.stdout);
+    let compact_value: Value =
+        serde_json::from_slice(&compact.stdout).expect("compact capabilities were not JSON");
+    let pretty_value: Value =
+        serde_json::from_slice(&pretty.stdout).expect("pretty capabilities were not JSON");
+    assert_eq!(compact_value, pretty_value);
+}
+
+#[test]
+fn version_flag_matches_the_package() {
+    let output = binary()
+        .arg("--version")
+        .output()
+        .expect("version command failed to start");
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim_end(),
+        format!("smithers-nanocodex {}", env!("CARGO_PKG_VERSION"))
+    );
 }
 
 #[test]
@@ -61,6 +100,15 @@ fn serve_emits_hello_then_one_process_failure_for_an_invalid_first_command() {
     assert_eq!(records.len(), 2);
     assert_eq!(records[0]["type"], "hello");
     assert_eq!(records[0]["seq"], 1);
+    assert_eq!(
+        records[0]["data"]["bridgeVersion"],
+        env!("CARGO_PKG_VERSION")
+    );
+    assert_eq!(records[0]["data"]["nanocodexVersion"], "0.5.0");
+    assert_eq!(
+        records[0]["data"]["target"],
+        env!("SMITHERS_NANOCODEX_TARGET")
+    );
     assert_eq!(records[1]["type"], "process.failed");
     assert_eq!(records[1]["seq"], 2);
     assert_eq!(records[1]["data"]["error"]["code"], "invalid_json");

@@ -19,8 +19,8 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 40
 
-    # Distribution baseline: x86_64 Linux with glibc 2.35 or newer
-    # (Ubuntu 22.04). Release packaging enforces the same contract.
+    # Linux distribution baseline: x86_64 GNU/Linux with glibc 2.35 or newer
+    # (Ubuntu 22.04). macOS arm64 is a separate shipped target.
     env:
       RUST_VERSION: 1.97.0
       TARGET: x86_64-unknown-linux-gnu
@@ -80,17 +80,27 @@ jobs:
           test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
           test "$(./target/$TARGET/release/smithers-nanocodex --version)" = \
             "smithers-nanocodex $package_version"
-          ./target/$TARGET/release/smithers-nanocodex capabilities --json
+          ./target/$TARGET/release/smithers-nanocodex capabilities --json | python3 -c '
+          import json, sys
+          expected_target, expected_bridge = sys.argv[1], sys.argv[2]
+          data = json.load(sys.stdin)
+          assert data["bridgeVersion"] == expected_bridge, data["bridgeVersion"]
+          assert data["nanocodexVersion"] == "0.5.0", data["nanocodexVersion"]
+          assert data["target"] == expected_target, data["target"]
+          assert data["protocol"]["name"] == "smithers.nanocodex"
+          assert data["protocol"]["versions"] == [1]
+          ' "$TARGET" "$package_version"
 
   macos-portability:
     name: macOS source portability
     runs-on: macos-15
     timeout-minutes: 40
 
-    # This proves the source and provider-independent suite stay portable. It
-    # does not create a supported artifact or replace Linux PID containment.
+    # Provider-independent suite on the shipped macOS triple.
     env:
       RUST_VERSION: 1.97.0
+      TARGET: aarch64-apple-darwin
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
 
     steps:
       - name: Check out source
@@ -99,7 +109,42 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned Rust toolchain
-        run: rustup toolchain install "$RUST_VERSION" --profile minimal
+        run: rustup toolchain install "$RUST_VERSION" --profile minimal --component clippy,rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: Run provider-independent tests
         run: cargo test --locked --all-targets
+
+      - name: Build release binary
+        run: cargo build --locked --release --target "$TARGET"
+
+      - name: Verify release metadata
+        shell: bash
+        run: |
+          package_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          test -n "$package_version"
+          test "$(uname -m)" = "arm64"
+          test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
+          file "./target/$TARGET/release/smithers-nanocodex" | grep -q "Mach-O 64-bit executable arm64"
+          otool -l "./target/$TARGET/release/smithers-nanocodex" | python3 -c '
+          import sys
+          text = sys.stdin.read()
+          assert "minos 15.0" in text, text
+          '
+          test "$(./target/$TARGET/release/smithers-nanocodex --version)" = \
+            "smithers-nanocodex $package_version"
+          ./target/$TARGET/release/smithers-nanocodex capabilities --json | python3 -c '
+          import json, sys
+          expected_target, expected_bridge = sys.argv[1], sys.argv[2]
+          data = json.load(sys.stdin)
+          assert data["bridgeVersion"] == expected_bridge, data["bridgeVersion"]
+          assert data["nanocodexVersion"] == "0.5.0", data["nanocodexVersion"]
+          assert data["target"] == expected_target, data["target"]
+          assert data["protocol"]["name"] == "smithers.nanocodex"
+          assert data["protocol"]["versions"] == [1]
+          ' "$TARGET" "$package_version"

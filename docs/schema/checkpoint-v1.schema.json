@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://n0xmare.github.io/smithers-nanocodex/schema/checkpoint-v1.schema.json",
+  "$comment": "The $id is a stable protocol-v1 identity URI and is not required to resolve. 0.0.2 still uses this v1 identity; payload.nanocodexVersion is const 0.5.0 on the same envelope.",
   "title": "Smithers Nanocodex checkpoint envelope v1",
   "type": "object",
   "additionalProperties": false,
@@ -21,7 +22,7 @@
       ],
       "properties": {
         "bridgeProtocolVersion": { "const": 1 },
-        "nanocodexVersion": { "const": "0.3.0" },
+        "nanocodexVersion": { "const": "0.5.0" },
         "snapshotVersion": { "const": 1 },
         "canonicalWorkspace": {
           "type": "string",

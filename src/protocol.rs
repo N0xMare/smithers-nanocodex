@@ -208,7 +208,7 @@ pub struct TurnOptions {
     pub fast_mode: Option<bool>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ThinkingLevel {
     None,
@@ -219,7 +219,7 @@ pub enum ThinkingLevel {
     Max,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ReasoningMode {
     Standard,
@@ -378,6 +378,48 @@ mod tests {
         assert!(!valid_id("contains/slash"));
         assert!(!valid_id("unicode-☃"));
         assert!(!valid_id(&"a".repeat(IDENTIFIER_MAX_BYTES + 1)));
+    }
+
+    #[test]
+    fn thinking_levels_include_xhigh_and_max() {
+        for (wire, expected) in [
+            ("none", ThinkingLevel::None),
+            ("low", ThinkingLevel::Low),
+            ("medium", ThinkingLevel::Medium),
+            ("high", ThinkingLevel::High),
+            ("xhigh", ThinkingLevel::Xhigh),
+            ("max", ThinkingLevel::Max),
+        ] {
+            let mut frame = start_frame();
+            frame["data"]["options"]["thinking"] = Value::String(wire.to_owned());
+            let parsed: ClientFrame =
+                strict_json::from_slice(&serde_json::to_vec(&frame).unwrap()).unwrap();
+            let start = parsed.into_start().unwrap();
+            assert_eq!(
+                start.data.options.thinking,
+                Some(expected),
+                "thinking {wire}"
+            );
+        }
+    }
+
+    #[test]
+    fn reasoning_modes_include_standard_and_pro() {
+        for (wire, expected) in [
+            ("standard", ReasoningMode::Standard),
+            ("pro", ReasoningMode::Pro),
+        ] {
+            let mut frame = start_frame();
+            frame["data"]["options"]["reasoningMode"] = Value::String(wire.to_owned());
+            let parsed: ClientFrame =
+                strict_json::from_slice(&serde_json::to_vec(&frame).unwrap()).unwrap();
+            let start = parsed.into_start().unwrap();
+            assert_eq!(
+                start.data.options.reasoning_mode,
+                Some(expected),
+                "reasoningMode {wire}"
+            );
+        }
     }
 
     #[test]

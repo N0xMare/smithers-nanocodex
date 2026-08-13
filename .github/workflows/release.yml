@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  package:
+  package-linux:
     name: Build and package Linux x86_64
     runs-on: ubuntu-22.04
     timeout-minutes: 40
@@ -93,7 +93,16 @@ jobs:
           test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
           test "$(./target/$TARGET/release/smithers-nanocodex --version)" = \
             "smithers-nanocodex ${{ steps.release.outputs.version }}"
-          ./target/$TARGET/release/smithers-nanocodex capabilities --json
+          ./target/$TARGET/release/smithers-nanocodex capabilities --json | python3 -c '
+          import json, sys
+          expected_target, expected_bridge = sys.argv[1], sys.argv[2]
+          data = json.load(sys.stdin)
+          assert data["bridgeVersion"] == expected_bridge, data["bridgeVersion"]
+          assert data["nanocodexVersion"] == "0.5.0", data["nanocodexVersion"]
+          assert data["target"] == expected_target, data["target"]
+          assert data["protocol"]["name"] == "smithers.nanocodex"
+          assert data["protocol"]["versions"] == [1]
+          ' "$TARGET" "${{ steps.release.outputs.version }}"
 
       - name: Package release archive
         id: package
@@ -109,7 +118,8 @@ jobs:
             "dist/${package}/third-party"
           install -m 0755 "target/${target}/release/smithers-nanocodex" "dist/${package}/"
           install -m 0644 README.md LICENSE "dist/${package}/"
-          cp -R docs/. "dist/${package}/docs/"
+          # Never ship gitignored maintainer scratch such as docs/local/.
+          rsync -a --exclude '/local/' docs/ "dist/${package}/docs/"
           find "dist/${package}/docs" -type d -exec chmod 0755 {} +
           find "dist/${package}/docs" -type f -exec chmod 0644 {} +
           install -m 0644 third-party/README.md third-party/THIRD-PARTY-LICENSES.html \
@@ -133,24 +143,187 @@ jobs:
           tar -C smoke -xzf "$archive"
           chmod 0755 smoke "smoke/${package}"
           chmod -R a+rX "smoke/${package}"
-          test "$(tar -tzf "$archive" | head -n 1)" = "${package}/"
+          members="$(tar -tzf "$archive")"
+          test "$(printf '%s\n' "$members" | head -n 1)" = "${package}/"
+          printf '%s\n' "$members" | grep -qx "${package}/docs/spec.md"
+          if printf '%s\n' "$members" | grep -E "/docs/local(/|$)"; then
+            echo "release archive must not contain docs/local/" >&2
+            exit 1
+          fi
+          if printf '%s\n' "$members" | grep '/\._'; then
+            echo "release archive must not contain AppleDouble members" >&2
+            exit 1
+          fi
           timeout --signal=TERM --kill-after=5s 30s \
             docker run --rm --platform linux/amd64 --network none \
             --user 65534:65534 \
             --volume "$PWD/smoke/${package}:/opt/release:ro" \
             "$BASELINE_IMAGE" \
-            /opt/release/smithers-nanocodex --version
+            /opt/release/smithers-nanocodex --version | \
+            grep -Fx "smithers-nanocodex ${{ steps.release.outputs.version }}"
           timeout --signal=TERM --kill-after=5s 30s \
             docker run --rm --platform linux/amd64 --network none \
             --user 65534:65534 \
             --volume "$PWD/smoke/${package}:/opt/release:ro" \
             "$BASELINE_IMAGE" \
-            /opt/release/smithers-nanocodex capabilities --json
+            /opt/release/smithers-nanocodex capabilities --json | python3 -c '
+            import json, sys
+            expected_target, expected_bridge = sys.argv[1], sys.argv[2]
+            data = json.load(sys.stdin)
+            assert data["bridgeVersion"] == expected_bridge, data["bridgeVersion"]
+            assert data["nanocodexVersion"] == "0.5.0", data["nanocodexVersion"]
+            assert data["target"] == expected_target, data["target"]
+            ' "x86_64-unknown-linux-gnu" "${{ steps.release.outputs.version }}"
 
       - name: Upload verified release files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-${{ github.ref_name }}
+          name: release-linux-${{ github.ref_name }}
+          path: |
+            dist/${{ steps.package.outputs.archive }}
+            dist/${{ steps.package.outputs.archive }}.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  package-darwin:
+    name: Build and package macOS arm64
+    runs-on: macos-15
+    timeout-minutes: 40
+    permissions:
+      contents: read
+
+    env:
+      RUST_VERSION: 1.97.0
+      TARGET: aarch64-apple-darwin
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
+      COPYFILE_DISABLE: "1"
+
+    outputs:
+      archive: ${{ steps.package.outputs.archive }}
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install "$RUST_VERSION" --profile minimal --component clippy,rustfmt
+
+      - name: Validate release tag
+        id: release
+        shell: bash
+        run: |
+          package_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          test -n "$package_version"
+          test "$GITHUB_REF_NAME" = "v$package_version"
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --locked --all-targets
+
+      - name: Build release binary
+        run: cargo build --locked --release --target "$TARGET"
+
+      - name: Verify release binary
+        shell: bash
+        run: |
+          test "$(uname -m)" = "arm64"
+          test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
+          file "./target/$TARGET/release/smithers-nanocodex" | grep -q "Mach-O 64-bit executable arm64"
+          otool -l "./target/$TARGET/release/smithers-nanocodex" | python3 -c '
+          import sys
+          text = sys.stdin.read()
+          assert "minos 15.0" in text, text
+          '
+          test "$(./target/$TARGET/release/smithers-nanocodex --version)" = \
+            "smithers-nanocodex ${{ steps.release.outputs.version }}"
+          ./target/$TARGET/release/smithers-nanocodex capabilities --json | python3 -c '
+          import json, sys
+          expected_target, expected_bridge = sys.argv[1], sys.argv[2]
+          data = json.load(sys.stdin)
+          assert data["bridgeVersion"] == expected_bridge, data["bridgeVersion"]
+          assert data["nanocodexVersion"] == "0.5.0", data["nanocodexVersion"]
+          assert data["target"] == expected_target, data["target"]
+          assert data["protocol"]["name"] == "smithers.nanocodex"
+          assert data["protocol"]["versions"] == [1]
+          ' "$TARGET" "${{ steps.release.outputs.version }}"
+
+      - name: Install GNU tar
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: brew install gnu-tar
+
+      - name: Package release archive
+        id: package
+        shell: bash
+        run: |
+          target="$TARGET"
+          package="smithers-nanocodex-${GITHUB_REF_NAME}-${target}"
+          archive="${package}.tar.gz"
+          source_date_epoch="$(git log -1 --format=%ct)"
+          install -d -m 0755 \
+            "dist/${package}" \
+            "dist/${package}/docs" \
+            "dist/${package}/third-party"
+          install -m 0755 "target/${target}/release/smithers-nanocodex" "dist/${package}/"
+          install -m 0644 README.md LICENSE "dist/${package}/"
+          # Never ship gitignored maintainer scratch such as docs/local/.
+          rsync -a --exclude '/local/' docs/ "dist/${package}/docs/"
+          find "dist/${package}/docs" -type d -exec chmod 0755 {} +
+          find "dist/${package}/docs" -type f -exec chmod 0644 {} +
+          install -m 0644 third-party/README.md third-party/THIRD-PARTY-LICENSES.html \
+            "dist/${package}/third-party/"
+          gtar --sort=name \
+            --mtime="@${source_date_epoch}" \
+            --owner=0 --group=0 --numeric-owner \
+            --pax-option=delete=atime,delete=ctime \
+            -C dist -cf - "${package}" | gzip -n -9 > "dist/${archive}"
+          python3 -c 'from hashlib import sha256; from pathlib import Path; p=Path("dist")/"'"$archive"'"; (Path("dist")/f"{p.name}.sha256").write_text(f"{sha256(p.read_bytes()).hexdigest()}  {p.name}\n")'
+          echo "archive=${archive}" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke-test packaged archive
+        shell: bash
+        run: |
+          archive="dist/${{ steps.package.outputs.archive }}"
+          package="${{ steps.package.outputs.archive }}"
+          package="${package%.tar.gz}"
+          mkdir -p smoke
+          gtar -C smoke -xzf "$archive"
+          members="$(gtar -tzf "$archive")"
+          test "$(printf '%s\n' "$members" | head -n 1)" = "${package}/"
+          printf '%s\n' "$members" | grep -qx "${package}/docs/spec.md"
+          if printf '%s\n' "$members" | grep -E "/docs/local(/|$)"; then
+            echo "release archive must not contain docs/local/" >&2
+            exit 1
+          fi
+          if printf '%s\n' "$members" | grep '/\._'; then
+            echo "release archive must not contain AppleDouble members" >&2
+            exit 1
+          fi
+          test "$(smoke/${package}/smithers-nanocodex --version)" = \
+            "smithers-nanocodex ${{ steps.release.outputs.version }}"
+          smoke/${package}/smithers-nanocodex capabilities --json | python3 -c '
+          import json, sys
+          expected_target, expected_bridge = sys.argv[1], sys.argv[2]
+          data = json.load(sys.stdin)
+          assert data["bridgeVersion"] == expected_bridge, data["bridgeVersion"]
+          assert data["nanocodexVersion"] == "0.5.0", data["nanocodexVersion"]
+          assert data["target"] == expected_target, data["target"]
+          ' "aarch64-apple-darwin" "${{ steps.release.outputs.version }}"
+
+      - name: Upload verified release files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-darwin-${{ github.ref_name }}
           path: |
             dist/${{ steps.package.outputs.archive }}
             dist/${{ steps.package.outputs.archive }}.sha256
@@ -160,30 +333,40 @@ jobs:
 
   publish:
     name: Publish GitHub release
-    needs: package
+    needs: [package-linux, package-darwin]
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     permissions:
       contents: write
 
     steps:
-      - name: Download verified release files
+      - name: Download Linux release files
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-${{ github.ref_name }}
+          name: release-linux-${{ github.ref_name }}
           path: dist
 
-      - name: Verify downloaded checksum
+      - name: Download macOS release files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-darwin-${{ github.ref_name }}
+          path: dist
+
+      - name: Verify downloaded checksums
         working-directory: dist
-        run: sha256sum --check "${{ needs.package.outputs.archive }}.sha256"
+        run: |
+          sha256sum --check "${{ needs.package-linux.outputs.archive }}.sha256"
+          sha256sum --check "${{ needs.package-darwin.outputs.archive }}.sha256"
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "dist/${{ needs.package.outputs.archive }}" \
-            "dist/${{ needs.package.outputs.archive }}.sha256" \
+            "dist/${{ needs.package-linux.outputs.archive }}" \
+            "dist/${{ needs.package-linux.outputs.archive }}.sha256" \
+            "dist/${{ needs.package-darwin.outputs.archive }}" \
+            "dist/${{ needs.package-darwin.outputs.archive }}.sha256" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --generate-notes \

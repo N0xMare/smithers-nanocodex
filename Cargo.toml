@@ -1,9 +1,9 @@
 [package]
 name = "smithers-nanocodex"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 rust-version = "1.97"
-description = "One-shot Nanocodex bridge for Smithers workflow agents"
+description = "One-shot Nanocodex JSONL bridge for Smithers"
 license = "MIT"
 repository = "https://github.com/N0xMare/smithers-nanocodex"
 readme = "README.md"
@@ -15,7 +15,7 @@ async-trait = "0.1"
 clap = { version = "4.5", features = ["derive"] }
 futures-util = "0.3"
 libc = "0.2"
-nanocodex = "=0.3.0"
+nanocodex = "=0.5.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
