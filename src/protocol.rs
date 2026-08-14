@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use crate::{
@@ -201,11 +201,66 @@ pub struct TurnOptions {
     #[serde(default)]
     pub instructions: Option<String>,
     #[serde(default)]
+    pub model: Option<ModelId>,
+    #[serde(default)]
     pub thinking: Option<ThinkingLevel>,
     #[serde(default)]
     pub reasoning_mode: Option<ReasoningMode>,
     #[serde(default)]
     pub fast_mode: Option<bool>,
+}
+
+/// Closed Nanocodex 0.5.0 GPT-5.6 coding models.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ModelId {
+    #[default]
+    Sol,
+    Terra,
+    Luna,
+}
+
+impl ModelId {
+    pub const WIRE_SOL: &'static str = "gpt-5.6-sol";
+    pub const WIRE_TERRA: &'static str = "gpt-5.6-terra";
+    pub const WIRE_LUNA: &'static str = "gpt-5.6-luna";
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Sol => Self::WIRE_SOL,
+            Self::Terra => Self::WIRE_TERRA,
+            Self::Luna => Self::WIRE_LUNA,
+        }
+    }
+
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            Self::WIRE_SOL | "sol" => Some(Self::Sol),
+            Self::WIRE_TERRA | "terra" => Some(Self::Terra),
+            Self::WIRE_LUNA | "luna" => Some(Self::Luna),
+            _ => None,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ModelId {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value).ok_or_else(|| {
+            serde::de::Error::unknown_variant(
+                &value,
+                &[
+                    Self::WIRE_SOL,
+                    Self::WIRE_TERRA,
+                    Self::WIRE_LUNA,
+                    "sol",
+                    "terra",
+                    "luna",
+                ],
+            )
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
@@ -401,6 +456,34 @@ mod tests {
                 "thinking {wire}"
             );
         }
+    }
+
+    #[test]
+    fn models_accept_full_ids_and_short_aliases() {
+        for (wire, expected) in [
+            ("gpt-5.6-sol", ModelId::Sol),
+            ("sol", ModelId::Sol),
+            ("gpt-5.6-terra", ModelId::Terra),
+            ("terra", ModelId::Terra),
+            ("gpt-5.6-luna", ModelId::Luna),
+            ("luna", ModelId::Luna),
+        ] {
+            let mut frame = start_frame();
+            frame["data"]["options"]["model"] = Value::String(wire.to_owned());
+            let parsed: ClientFrame =
+                strict_json::from_slice(&serde_json::to_vec(&frame).unwrap()).unwrap();
+            let start = parsed.into_start().unwrap();
+            assert_eq!(start.data.options.model, Some(expected), "model {wire}");
+        }
+    }
+
+    #[test]
+    fn unknown_model_is_rejected() {
+        let mut frame = start_frame();
+        frame["data"]["options"]["model"] = Value::String("gpt-4.1".to_owned());
+        let parsed: ClientFrame =
+            strict_json::from_slice(&serde_json::to_vec(&frame).unwrap()).unwrap();
+        assert_eq!(parsed.into_start().unwrap_err().code, "invalid_turn_start");
     }
 
     #[test]

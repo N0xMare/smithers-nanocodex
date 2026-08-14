@@ -81,7 +81,7 @@ jobs:
           test "$(./target/$TARGET/release/smithers-nanocodex --version)" = \
             "smithers-nanocodex $package_version"
           ./target/$TARGET/release/smithers-nanocodex capabilities --json | python3 -c \
-            'import json,sys; t,v=sys.argv[1],sys.argv[2]; d=json.load(sys.stdin); assert d["bridgeVersion"]==v, d["bridgeVersion"]; assert d["nanocodexVersion"]=="0.5.0", d["nanocodexVersion"]; assert d["target"]==t, d["target"]; assert d["protocol"]["name"]=="smithers.nanocodex"; assert d["protocol"]["versions"]==[1]' \
+            'import json,sys; t,v=sys.argv[1],sys.argv[2]; d=json.load(sys.stdin); assert d["bridgeVersion"]==v, d["bridgeVersion"]; assert d["nanocodexVersion"]=="0.5.0", d["nanocodexVersion"]; assert d["target"]==t, d["target"]; assert d["protocol"]["name"]=="smithers.nanocodex"; assert d["protocol"]["versions"]==[1]; assert d["defaultModel"]=="gpt-5.6-sol"; assert d["models"]==["gpt-5.6-sol","gpt-5.6-terra","gpt-5.6-luna"]; assert d["defaultThinking"]=="high"' \
             "$TARGET" "$package_version"
 
   macos-portability:
@@ -129,5 +129,5 @@ jobs:
           test "$(./target/$TARGET/release/smithers-nanocodex --version)" = \
             "smithers-nanocodex $package_version"
           ./target/$TARGET/release/smithers-nanocodex capabilities --json | python3 -c \
-            'import json,sys; t,v=sys.argv[1],sys.argv[2]; d=json.load(sys.stdin); assert d["bridgeVersion"]==v, d["bridgeVersion"]; assert d["nanocodexVersion"]=="0.5.0", d["nanocodexVersion"]; assert d["target"]==t, d["target"]; assert d["protocol"]["name"]=="smithers.nanocodex"; assert d["protocol"]["versions"]==[1]' \
+            'import json,sys; t,v=sys.argv[1],sys.argv[2]; d=json.load(sys.stdin); assert d["bridgeVersion"]==v, d["bridgeVersion"]; assert d["nanocodexVersion"]=="0.5.0", d["nanocodexVersion"]; assert d["target"]==t, d["target"]; assert d["protocol"]["name"]=="smithers.nanocodex"; assert d["protocol"]["versions"]==[1]; assert d["defaultModel"]=="gpt-5.6-sol"; assert d["models"]==["gpt-5.6-sol","gpt-5.6-terra","gpt-5.6-luna"]; assert d["defaultThinking"]=="high"' \
             "$TARGET" "$package_version"

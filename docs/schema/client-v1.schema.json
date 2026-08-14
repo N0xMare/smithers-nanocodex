@@ -65,6 +65,17 @@
         "instructions": {
           "type": ["string", "null"]
         },
+        "model": {
+          "enum": [
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "sol",
+            "terra",
+            "luna",
+            null
+          ]
+        },
         "thinking": {
           "enum": ["none", "low", "medium", "high", "xhigh", "max", null]
         },

@@ -94,7 +94,7 @@ jobs:
           test "$(./target/$TARGET/release/smithers-nanocodex --version)" = \
             "smithers-nanocodex ${{ steps.release.outputs.version }}"
           ./target/$TARGET/release/smithers-nanocodex capabilities --json | python3 -c \
-            'import json,sys; t,v=sys.argv[1],sys.argv[2]; d=json.load(sys.stdin); assert d["bridgeVersion"]==v, d["bridgeVersion"]; assert d["nanocodexVersion"]=="0.5.0", d["nanocodexVersion"]; assert d["target"]==t, d["target"]; assert d["protocol"]["name"]=="smithers.nanocodex"; assert d["protocol"]["versions"]==[1]' \
+            'import json,sys; t,v=sys.argv[1],sys.argv[2]; d=json.load(sys.stdin); assert d["bridgeVersion"]==v, d["bridgeVersion"]; assert d["nanocodexVersion"]=="0.5.0", d["nanocodexVersion"]; assert d["target"]==t, d["target"]; assert d["protocol"]["name"]=="smithers.nanocodex"; assert d["protocol"]["versions"]==[1]; assert d["defaultModel"]=="gpt-5.6-sol"; assert d["models"]==["gpt-5.6-sol","gpt-5.6-terra","gpt-5.6-luna"]; assert d["defaultThinking"]=="high"' \
             "$TARGET" "${{ steps.release.outputs.version }}"
 
       - name: Package release archive
@@ -160,7 +160,7 @@ jobs:
             --volume "$PWD/smoke/${package}:/opt/release:ro" \
             "$BASELINE_IMAGE" \
             /opt/release/smithers-nanocodex capabilities --json | python3 -c \
-            'import json,sys; t,v=sys.argv[1],sys.argv[2]; d=json.load(sys.stdin); assert d["bridgeVersion"]==v, d["bridgeVersion"]; assert d["nanocodexVersion"]=="0.5.0", d["nanocodexVersion"]; assert d["target"]==t, d["target"]' \
+            'import json,sys; t,v=sys.argv[1],sys.argv[2]; d=json.load(sys.stdin); assert d["bridgeVersion"]==v, d["bridgeVersion"]; assert d["nanocodexVersion"]=="0.5.0", d["nanocodexVersion"]; assert d["target"]==t, d["target"]; assert d["defaultModel"]=="gpt-5.6-sol"; assert d["models"]==["gpt-5.6-sol","gpt-5.6-terra","gpt-5.6-luna"]' \
             "x86_64-unknown-linux-gnu" "${{ steps.release.outputs.version }}"
 
       - name: Upload verified release files
@@ -232,7 +232,7 @@ jobs:
           test "$(./target/$TARGET/release/smithers-nanocodex --version)" = \
             "smithers-nanocodex ${{ steps.release.outputs.version }}"
           ./target/$TARGET/release/smithers-nanocodex capabilities --json | python3 -c \
-            'import json,sys; t,v=sys.argv[1],sys.argv[2]; d=json.load(sys.stdin); assert d["bridgeVersion"]==v, d["bridgeVersion"]; assert d["nanocodexVersion"]=="0.5.0", d["nanocodexVersion"]; assert d["target"]==t, d["target"]; assert d["protocol"]["name"]=="smithers.nanocodex"; assert d["protocol"]["versions"]==[1]' \
+            'import json,sys; t,v=sys.argv[1],sys.argv[2]; d=json.load(sys.stdin); assert d["bridgeVersion"]==v, d["bridgeVersion"]; assert d["nanocodexVersion"]=="0.5.0", d["nanocodexVersion"]; assert d["target"]==t, d["target"]; assert d["protocol"]["name"]=="smithers.nanocodex"; assert d["protocol"]["versions"]==[1]; assert d["defaultModel"]=="gpt-5.6-sol"; assert d["models"]==["gpt-5.6-sol","gpt-5.6-terra","gpt-5.6-luna"]; assert d["defaultThinking"]=="high"' \
             "$TARGET" "${{ steps.release.outputs.version }}"
 
       - name: Install GNU tar
@@ -290,7 +290,7 @@ jobs:
           test "$(smoke/${package}/smithers-nanocodex --version)" = \
             "smithers-nanocodex ${{ steps.release.outputs.version }}"
           smoke/${package}/smithers-nanocodex capabilities --json | python3 -c \
-            'import json,sys; t,v=sys.argv[1],sys.argv[2]; d=json.load(sys.stdin); assert d["bridgeVersion"]==v, d["bridgeVersion"]; assert d["nanocodexVersion"]=="0.5.0", d["nanocodexVersion"]; assert d["target"]==t, d["target"]' \
+            'import json,sys; t,v=sys.argv[1],sys.argv[2]; d=json.load(sys.stdin); assert d["bridgeVersion"]==v, d["bridgeVersion"]; assert d["nanocodexVersion"]=="0.5.0", d["nanocodexVersion"]; assert d["target"]==t, d["target"]; assert d["defaultModel"]=="gpt-5.6-sol"; assert d["models"]==["gpt-5.6-sol","gpt-5.6-terra","gpt-5.6-luna"]' \
             "aarch64-apple-darwin" "${{ steps.release.outputs.version }}"
 
       - name: Upload verified release files

@@ -48,13 +48,15 @@ vectors.
 - Tool profile: `nanocodex-stock-0.5.0`
 - Release targets: `x86_64-unknown-linux-gnu` (glibc 2.35+, Ubuntu 22.04) and
   `aarch64-apple-darwin` (macOS 15)
-- Model: Nanocodex 0.5.0 stock (`gpt-5.6-sol`)
+- Models: `gpt-5.6-sol` (default), `gpt-5.6-terra`, `gpt-5.6-luna`
+- Thinking/effort: `none`/`low`/`medium`/`high` (default if omitted)/`xhigh`/`max`
+- Reasoning mode: `standard` (default) or `pro`
+- Fast mode: optional priority processing
 
 The current consumer contract is
-[`docs/releases/v0.0.2.json`](docs/releases/v0.0.2.json). It is currently
-`prepared`: digest, size, and tag-commit fields are filled only when that tag
-is published. Until then the GitHub “Latest” release remains historical
-`v0.0.1` and the 0.0.2 archives do not exist. The historical qualified pin
+[`docs/releases/v0.0.2.json`](docs/releases/v0.0.2.json). GitHub release
+sidecar checksums are the published pin; this file does not duplicate those
+digests. The historical qualified pin
 [`docs/releases/v0.0.1.json`](docs/releases/v0.0.1.json) is immutable and is
 not updated. In that pin, `policyFingerprint` is the algorithm identifier; in
 a checkpoint envelope the same field name is the SHA-256 digest.

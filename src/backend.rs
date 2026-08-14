@@ -47,7 +47,7 @@ use crate::{
     },
     error::{ErrorCategory, PublicError, RetryDisposition},
     protocol::{
-        AuthConfig, Continuation, ReasoningMode, ThinkingLevel, TurnOptions, TurnStartData,
+        AuthConfig, Continuation, ModelId, ReasoningMode, ThinkingLevel, TurnOptions, TurnStartData,
     },
 };
 
@@ -214,6 +214,11 @@ where
     let mut builder = Nanocodex::builder(openai)
         .workspace(&validated.canonical_workspace)
         .tools(validated.tools);
+    if validated.snapshot.is_none() {
+        builder = builder.model(native_model(
+            validated.options.model.unwrap_or(ModelId::Sol),
+        ));
+    }
     if let Some(instructions) = validated.options.instructions {
         builder = builder.instructions(instructions);
     }
@@ -682,6 +687,20 @@ fn validate_request(request: TurnStartData) -> Result<ValidatedRequest, PublicEr
                     "The checkpoint workspace does not match the requested workspace.",
                 ));
             }
+            if let Some(requested) = request.options.model {
+                let stored = canonical_snapshot
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .and_then(ModelId::parse);
+                if stored != Some(requested) {
+                    return Err(PublicError::new(
+                        "model_mismatch",
+                        ErrorCategory::Checkpoint,
+                        "The requested model does not match the resumed snapshot model.",
+                        RetryDisposition::Never,
+                    ));
+                }
+            }
             Some(snapshot)
         }
     };
@@ -1137,6 +1156,14 @@ fn valid_environment_name(value: &str) -> bool {
     value.len() <= 128
         && (first == b'_' || first.is_ascii_alphabetic())
         && bytes.all(|byte| byte == b'_' || byte.is_ascii_alphanumeric())
+}
+
+fn native_model(value: ModelId) -> nanocodex::Model {
+    match value {
+        ModelId::Sol => nanocodex::Model::Sol,
+        ModelId::Terra => nanocodex::Model::Terra,
+        ModelId::Luna => nanocodex::Model::Luna,
+    }
 }
 
 fn native_thinking(value: ThinkingLevel) -> NativeThinking {
@@ -3074,6 +3101,27 @@ text(result.output);"#,
         .expect("workspace-mismatched snapshot must be rejected");
         assert_eq!(mismatched.code, "workspace_changed");
         assert_eq!(mismatched.category, ErrorCategory::Workspace);
+
+        assert_eq!(completed.snapshot["model"], ModelId::WIRE_SOL);
+        let mismatched_model = validate_request(TurnStartData {
+            prompt: "resume".to_owned(),
+            workspace: workspace.path().canonicalize().unwrap(),
+            auth: AuthConfig::ApiKeyEnv {
+                environment_variable: "UNUSED_TEST_KEY".to_owned(),
+            },
+            transport: crate::protocol::TransportConfig::Websocket,
+            options: crate::protocol::TurnOptions {
+                model: Some(ModelId::Luna),
+                ..crate::protocol::TurnOptions::default()
+            },
+            continuation: Some(Continuation::Resume {
+                snapshot: completed.snapshot.clone(),
+            }),
+        })
+        .err()
+        .expect("explicit mismatched model must be rejected");
+        assert_eq!(mismatched_model.code, "model_mismatch");
+        assert_eq!(mismatched_model.category, ErrorCategory::Checkpoint);
 
         let snapshot: SessionSnapshot = serde_json::from_value(completed.snapshot).unwrap();
         let (notice_tx, _notice_rx) = mpsc::channel(256);

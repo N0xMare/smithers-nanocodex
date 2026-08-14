@@ -36,6 +36,11 @@ pub struct Capabilities {
     pub checkpoint: CheckpointCapabilities,
     pub authentication_modes: [&'static str; 2],
     pub transport_modes: [&'static str; 1],
+    pub models: [&'static str; 3],
+    pub default_model: &'static str,
+    pub thinking_levels: [&'static str; 6],
+    pub default_thinking: &'static str,
+    pub reasoning_modes: [&'static str; 2],
     pub features: FeatureCapabilities,
     pub limits: ProtocolLimits,
 }
@@ -110,6 +115,11 @@ impl Capabilities {
             },
             authentication_modes: ["api-key-env", "chatgpt"],
             transport_modes: ["websocket"],
+            models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+            default_model: "gpt-5.6-sol",
+            thinking_levels: ["none", "low", "medium", "high", "xhigh", "max"],
+            default_thinking: "high",
+            reasoning_modes: ["standard", "pro"],
             features: FeatureCapabilities {
                 code_mode: true,
                 code_mode_disable: false,
@@ -167,6 +177,13 @@ mod tests {
         assert!(!capabilities.features.custom_endpoints);
         assert!(!capabilities.features.workspace_relocation);
         assert!(!capabilities.features.subagents);
+        assert_eq!(
+            capabilities.models,
+            ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]
+        );
+        assert_eq!(capabilities.default_model, "gpt-5.6-sol");
+        assert_eq!(capabilities.default_thinking, "high");
+        assert_eq!(capabilities.reasoning_modes, ["standard", "pro"]);
     }
 
     #[test]

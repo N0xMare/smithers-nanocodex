@@ -13,6 +13,11 @@
     "checkpoint",
     "authenticationModes",
     "transportModes",
+    "models",
+    "defaultModel",
+    "thinkingLevels",
+    "defaultThinking",
+    "reasoningModes",
     "features",
     "limits"
   ],
@@ -91,6 +96,40 @@
       "items": false,
       "minItems": 1,
       "maxItems": 1
+    },
+    "models": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "gpt-5.6-sol" },
+        { "const": "gpt-5.6-terra" },
+        { "const": "gpt-5.6-luna" }
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "defaultModel": { "const": "gpt-5.6-sol" },
+    "thinkingLevels": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "none" },
+        { "const": "low" },
+        { "const": "medium" },
+        { "const": "high" },
+        { "const": "xhigh" },
+        { "const": "max" }
+      ],
+      "items": false,
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "defaultThinking": { "const": "high" },
+    "reasoningModes": {
+      "type": "array",
+      "prefixItems": [{ "const": "standard" }, { "const": "pro" }],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     },
     "features": {
       "type": "object",

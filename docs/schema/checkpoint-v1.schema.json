@@ -24,6 +24,7 @@
         "bridgeProtocolVersion": { "const": 1 },
         "nanocodexVersion": { "const": "0.5.0" },
         "snapshotVersion": { "const": 1 },
+        "model": { "enum": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] },
         "canonicalWorkspace": {
           "type": "string",
           "minLength": 1,

@@ -1071,6 +1071,7 @@ fn completed_json(completed: CompletedTurn) -> Value {
     json!({
         "finalMessage": completed.final_message,
         "usage": completed.usage,
+        "model": completed_model(&completed.snapshot),
         "snapshotVersion": completed.snapshot_version,
         "snapshot": completed.snapshot,
         "canonicalWorkspace": completed.canonical_workspace,
@@ -1082,10 +1083,20 @@ fn recovery_json(completed: CompletedTurn) -> Value {
     // boundary is needed. Omitting the duplicate final text and usage keeps a
     // maximum-sized valid snapshot representable in the terminal frame.
     json!({
+        "model": completed_model(&completed.snapshot),
         "snapshotVersion": completed.snapshot_version,
         "snapshot": completed.snapshot,
         "canonicalWorkspace": completed.canonical_workspace,
     })
+}
+
+fn completed_model(snapshot: &Value) -> &'static str {
+    snapshot
+        .get("model")
+        .and_then(Value::as_str)
+        .and_then(crate::protocol::ModelId::parse)
+        .unwrap_or(crate::protocol::ModelId::Sol)
+        .as_str()
 }
 
 fn parse_client_frame(record: &[u8]) -> Result<ClientFrame, PublicError> {

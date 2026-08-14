@@ -33,12 +33,14 @@
   "qualification": {
     "bridgeArtifact": false,
     "smithersAdapter": false,
-    "notes": "Digest, size, and tag-commit fields are recorded when the v0.0.2 tag is published. Until then this file is the prepared consumer contract, not a qualified pin. contract.policyFingerprint is the algorithm identifier; the checkpoint envelope field of the same name is the SHA-256 digest.",
+    "notes": "GitHub release sidecar checksums are the published pin. This file remains the prepared consumer contract and does not duplicate those digests. contract.policyFingerprint is the algorithm identifier; the checkpoint envelope field of the same name is the SHA-256 digest.",
     "checks": [
       "provider-independent suite on Linux and macOS",
       "capabilities report the compiled rustc target",
       "direct process spawn; adapter Bubblewrap is not required",
       "stock Nanocodex 0.5.0 with nanocodex-stock-0.5.0 policy profile",
+      "closed models gpt-5.6-sol (default), gpt-5.6-terra, gpt-5.6-luna",
+      "thinking/effort, reasoningMode including pro, and fastMode",
       "reject 0.0.1 / Nanocodex 0.3.0 / nanocodex-stock-0.3.0 envelopes before spawn"
     ]
   }

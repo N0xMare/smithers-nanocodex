@@ -55,7 +55,7 @@ Protocol v1 has this fixed baseline:
 | Bridge package | `smithers-nanocodex 0.0.2` |
 | Nanocodex crate | exactly `0.5.0` |
 | Rust toolchain | `1.97` |
-| Model | Nanocodex 0.5.0 stock model (`gpt-5.6-sol`) |
+| Models | Closed Nanocodex 0.5.0 set: `gpt-5.6-sol` (default), `gpt-5.6-terra`, `gpt-5.6-luna` |
 | Native Code Mode | enabled; not disableable |
 | Stock tool families | enabled |
 | Tool policy profile | `nanocodex-stock-0.5.0` |
@@ -95,9 +95,10 @@ protocol version other than `1` is rejected before the JSONL server starts.
 Compatibility is decided from `hello.data`, not from bridge semantic version
 alone. For this contract, protocol name/version, Nanocodex version, a shipped
 `target` rustc triple, checkpoint versions, ordered mode arrays, feature
-booleans, and limits MUST match the capability schema. `bridgeVersion` is
-informational. `target` is the triple the binary was compiled for, not a host
-policy string.
+booleans, advertised models/thinking/reasoning lists, and limits MUST match
+the capability schema. `bridgeVersion` is informational. `target` is the
+triple the binary was compiled for, not a host policy string. `defaultModel`
+is `gpt-5.6-sol`. `defaultThinking` is `high`.
 
 The exact v1 limits are:
 
@@ -309,15 +310,17 @@ path components or reading either credential file.
 | Field | Values | Meaning |
 | --- | --- | --- |
 | `instructions` | string or `null` | `null`/absent uses stock instructions. A string is a complete replacement, not an append. A replacement MUST trim nonempty and be at most 4 MiB UTF-8. |
-| `thinking` | `none`, `low`, `medium`, `high`, `xhigh`, `max` | Direct Nanocodex thinking setting. |
-| `reasoningMode` | `standard`, `pro` | Direct Nanocodex reasoning mode. |
-| `fastMode` | boolean | Direct Nanocodex fast-mode setting. |
+| `model` | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, or short aliases `sol` / `terra` / `luna` | Closed Nanocodex 0.5.0 model. Absent/`null` selects `gpt-5.6-sol` on a fresh turn. On resume, absent/`null` inherits the snapshot model; an explicit value MUST match the snapshot. |
+| `thinking` | `none`, `low`, `medium`, `high`, `xhigh`, `max` | Nanocodex reasoning effort. Absent/`null` uses Nanocodex's default (`high`). |
+| `reasoningMode` | `standard`, `pro` | Nanocodex reasoning execution mode. Absent/`null` uses `standard`. Pro is independent of thinking/effort. |
+| `fastMode` | boolean | Nanocodex priority-processing policy. Absent/`null` uses `false`. |
 
 Each individual option is optional. JSON `null` is equivalent to omission for
-all four fields; the `options` object itself, when present, MUST NOT be `null`.
+all five fields; the `options` object itself, when present, MUST NOT be `null`.
 
-There is no model, tool, endpoint, MCP, subagent, Code Mode, or append-prompt
-option in protocol v1.
+There is no tool, endpoint, MCP, subagent, Code Mode, or append-prompt
+option in protocol v1. Model is fixed for the native thread; resume cannot
+change it.
 
 ### 5.5 Continuation
 
@@ -484,11 +487,17 @@ acceptance, an unrecoverable outcome emits exactly one `process.failed`.
     "costStatus": "usage_not_reported",
     "serviceTier": null
   },
+  "model": "gpt-5.6-sol",
   "snapshotVersion": 1,
   "snapshot": {},
   "canonicalWorkspace": "/absolute/canonical/worktree"
 }
 ```
+
+`model` is the full Nanocodex wire id that produced the snapshot
+(`gpt-5.6-sol`, `gpt-5.6-terra`, or `gpt-5.6-luna`). The adapter copies this
+into checkpoint `payload.model`. Absent envelope `payload.model` on an older
+0.0.2 envelope means `gpt-5.6-sol`.
 
 Token counts are nonnegative integers. `estimatedUsd` is a nonnegative decimal
 string or `null`. This baseline emits `costStatus` as
@@ -504,8 +513,8 @@ Successful backend ordering is:
 
 1. drain through the upstream terminal event;
 2. await authoritative `TurnResult`;
-3. capture final message, explicit usage fields, snapshot version, snapshot,
-   session identity, and snapshot workspace;
+3. capture final message, explicit usage fields, model, snapshot version,
+   snapshot, session identity, and snapshot workspace;
 4. enforce snapshot/output limits;
 5. await `Nanocodex::shutdown()`;
 6. enqueue `turn.completed`;
@@ -759,8 +768,11 @@ stock vector. Production adapters accept only `instructions` and construct the
 record themselves; they do not accept raw policy JSON.
 
 Only continuation-sensitive instructions and the fixed stock tool profile are
-fingerprinted. Thinking, reasoning mode, fast mode, authentication, transport,
-workspace, timeouts, IDs, and credentials are intentionally excluded.
+fingerprinted. Model, thinking, reasoning mode, fast mode, authentication,
+transport, workspace, timeouts, IDs, and credentials are intentionally
+excluded. Resume binds model from the opaque snapshot and, when present, the
+adapter envelope `payload.model` field. Absent envelope `payload.model` means
+`gpt-5.6-sol`.
 
 ### 10.3 Publication durability and callback ordering
 
@@ -914,7 +926,10 @@ Provider-independent bridge artifact verification MUST cover:
 - event policy/size/aggregate/backpressure truncation while upstream draining
   continues;
 - fresh completion, same-path fresh-process resume, changed/missing workspace,
-  instruction/tool mismatch, and checkpoint size limits;
+  instruction/tool mismatch, explicit model mismatch, and checkpoint size
+  limits;
+- closed model ids (`gpt-5.6-sol`/`terra`/`luna` and short aliases) and
+  default Sol/High thinking when those options are omitted;
 - adversarial credential tests for bounded virtual-file reads, managed-auth
   staging/refresh synchronization, and the distinction between exact API-key
   blanking and the managed-auth/host-secret non-isolation stated here.

@@ -145,8 +145,9 @@
     "recovery": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["snapshotVersion", "snapshot", "canonicalWorkspace"],
+      "required": ["model", "snapshotVersion", "snapshot", "canonicalWorkspace"],
       "properties": {
+        "model": { "enum": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] },
         "snapshotVersion": { "const": 1 },
         "snapshot": { "type": "object" },
         "canonicalWorkspace": { "$ref": "#/$defs/absolutePath" }
@@ -303,10 +304,11 @@
         "data": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["finalMessage", "usage", "snapshotVersion", "snapshot", "canonicalWorkspace"],
+          "required": ["finalMessage", "usage", "model", "snapshotVersion", "snapshot", "canonicalWorkspace"],
           "properties": {
             "finalMessage": { "type": "string" },
             "usage": { "$ref": "#/$defs/usage" },
+            "model": { "enum": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] },
             "snapshotVersion": { "const": 1 },
             "snapshot": { "type": "object" },
             "canonicalWorkspace": { "$ref": "#/$defs/absolutePath" }
